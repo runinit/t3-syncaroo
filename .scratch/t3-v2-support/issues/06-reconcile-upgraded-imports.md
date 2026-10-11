@@ -11,4 +11,5 @@
 - [ ] A converted task with intact source mapping is matched by deterministic identity, project ownership, and canonical history, not title alone.
 - [ ] A missing importer ledger can be recovered conservatively from v2 projections and source evidence without replaying native events.
 - [ ] Reconciliation remains correct after T3 event compaction and does not depend on legacy receipts or complete historical event sequences.
+- [ ] On a converted or copied database retaining version-1 events, verify the projection checkpoint against T3 v2 native sequence semantics; distinguish the latest application-version-2 event from the global event maximum and do not assume migration implies later v1 writes.
 - [ ] Incomplete, changed, or ambiguous histories return an actionable per-session conflict and do not duplicate or overwrite the existing task.

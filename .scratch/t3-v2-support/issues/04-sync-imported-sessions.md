@@ -6,7 +6,7 @@
 
 **References:** [Support spec](../../../docs/t3-v2-support-spec.md) · [Research](../../../docs/t3-v2-support-research.md) · [Design](../../../docs/t3-v2-native-design.md) · [Completed writer proof](../../../docs/t3-v2-proof.md) (evidence, not a ticket).
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] T3 continuation targets the original Codex or Claude session and selected branch when its source data remains available; unavailability is reported clearly.
 - [ ] Synchronization appends only new settled turns and excludes active or indeterminate turns.
