@@ -30,7 +30,7 @@ import { checkpointForThread } from "../core/checkpoint.js";
 import { safetyError, writeError } from "../core/errors.js";
 import { resolveProviderSelection, type TargetOverrides } from "./config.js";
 import { assertT3Closed, validateTargetDatabase } from "./schema.js";
-import { recordImports, type LedgerRecord } from "./ledger.js";
+import { listImports, recordImports, type LedgerRecord } from "./ledger.js";
 
 const EVENT_TYPES = [
   "project.created",
@@ -434,11 +434,12 @@ function aggregateStatus(results: ImportItemResult[], dryRun: boolean): ImportRu
 interface V2ThreadReply {
   threadId: string;
   exists: boolean;
-  thread?: { id?: string; projectId?: string; historyOrigin?: string } | null;
+  thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string } | null;
+  events?: Array<{ id: string; sequence: number }>;
   records?: {
-    thread?: { id?: string; projectId?: string; historyOrigin?: string };
+    thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string };
     messages?: Array<{ role: string; text: string }>;
-    providerThreads?: Array<{ appThreadId?: string; driver?: string; nativeThreadRef?: { driver?: string; nativeId?: string; strength?: string } }>;
+    providerThreads?: Array<{ appThreadId?: string; driver?: string; providerInstanceId?: string; nativeThreadRef?: { driver?: string; nativeId?: string; strength?: string } }>;
   };
 }
 
@@ -515,7 +516,7 @@ function callV2Native(paths: TargetPaths, request: Record<string, unknown>): Pro
   });
 }
 
-function planV2TextThread(selection: ImportSelection, thread: CanonicalThread, paths: TargetPaths, projectId: string, createProject: boolean): V2Plan {
+function planV2TextThread(selection: ImportSelection, thread: CanonicalThread, paths: TargetPaths, projectId: string, createProject: boolean, providerInstance?: string): V2Plan {
   if (thread.source !== "codex") throw safetyError("This T3 v2 import slice accepts settled Codex text conversations only.");
   if (!thread.currentBranch) throw safetyError(`Codex session ${thread.sourceSessionId} has a non-current branch; branch history is not supported by this T3 v2 import slice.`);
   if (!thread.turns.length || thread.turns.some((turn) => turn.status === "inProgress")) {
@@ -527,7 +528,7 @@ function planV2TextThread(selection: ImportSelection, thread: CanonicalThread, p
   const threadId = /^[0-9a-f-]{36}$/iu.test(thread.sourceSessionId)
     ? thread.sourceSessionId
     : deterministicUuid(`t3-import:thread:${thread.sourceKey}`);
-  const provider = resolveProviderSelection(paths, "codex", thread.model, thread.effort);
+  const provider = resolveProviderSelection(paths, "codex", thread.model, thread.effort, providerInstance);
   const providerThreadId = deterministicUuid(`t3-import:v2:provider-thread:${thread.sourceKey}`);
   const createdAt = thread.createdAt;
   const updatedAt = thread.updatedAt;
@@ -612,13 +613,40 @@ function v2HistoryMatches(value: V2ThreadReply | undefined, plan: V2Plan): boole
     && nativeThread?.id === plan.threadId
     && nativeThread.projectId === plan.projectId
     && nativeThread.historyOrigin === "v1_import"
+    && nativeThread.providerInstanceId === plan.provider.instanceId
     && messages.length === plan.messages.length
     && messages.every((message, index) => message.role === plan.messages[index]?.role && message.text === plan.messages[index]?.text)
     && sessions.some((session) => session.appThreadId === plan.threadId
       && session.driver === "codex"
+      && session.providerInstanceId === plan.provider.instanceId
       && session.nativeThreadRef?.driver === "codex"
       && session.nativeThreadRef.strength === "strong"
       && session.nativeThreadRef.nativeId === plan.thread.sourceSessionId);
+}
+
+function v2EventOwnershipMatches(value: V2ThreadReply | undefined, plan: V2Plan): boolean {
+  const actual = value?.events;
+  const expected = plan.events.map((event) => String(event.id));
+  return Array.isArray(actual)
+    && actual.length === expected.length
+    && actual.every((event, index) => event.id === expected[index]
+      && Number.isSafeInteger(event.sequence)
+      && event.sequence > 0
+      && (index === 0 || event.sequence > actual[index - 1]!.sequence));
+}
+
+function v2LedgerRecord(plan: V2Plan, paths: TargetPaths, firstSequence: number, lastSequence: number, backupPath: string, warnings: string[]): LedgerRecord {
+  return {
+    targetId: sha256(canonicalPath(paths.dbPath)), source: "codex",
+    sourceSessionId: plan.thread.sourceSessionId, sourceKey: plan.thread.sourceKey,
+    sourceFingerprint: plan.fingerprint, projectId: plan.projectId, threadId: plan.threadId,
+    importedAt: new Date().toISOString(), importerVersion: IMPORTER_VERSION,
+    migration: 61, firstSequence, lastSequence,
+    resumable: plan.resumable, backupPath, warnings,
+    identitySeed: plan.thread.sourceKey, currentSourceKey: plan.thread.sourceKey,
+    ...(plan.thread.leafId ? { sourceLeafId: plan.thread.leafId } : {}),
+    sourceTitle: plan.thread.title, checkpoint: checkpointForThread(plan.thread), isCanonical: true,
+  };
 }
 
 async function importNightlyV2(
@@ -638,7 +666,7 @@ async function importNightlyV2(
         const projectedProject = knownProject ?? existingProjectId(db, thread.workspace);
         const projectId = projectedProject ?? deterministicUuid(`t3-import:project:${workspaceKey}`);
         projectIds.set(workspaceKey, projectId);
-        plans.push(planV2TextThread(selection, thread, paths, projectId, !projectedProject));
+        plans.push(planV2TextThread(selection, thread, paths, projectId, !projectedProject, options.providerInstance));
       }
     }
   } finally {
@@ -669,13 +697,33 @@ async function importNightlyV2(
   }
   const inspectedById = new Map((inspection.threads ?? []).map((thread) => [thread.threadId, thread]));
   const existing = new Set<string>();
+  const recoveryWarnings: string[] = [];
   for (const plan of plans) {
     const prior = inspectedById.get(plan.threadId);
     if (prior?.exists) {
-      if (!v2HistoryMatches(prior, plan)) {
+      if (!v2HistoryMatches(prior, plan) || !v2EventOwnershipMatches(prior, plan)) {
         throw safetyError(`T3 already has a different task for Codex session ${plan.thread.sourceSessionId}. Keep the existing task and resolve the history conflict before importing.`);
       }
       existing.add(plan.threadId);
+      if (!options.dryRun) {
+        const targetId = sha256(canonicalPath(paths.dbPath));
+        let ledgerRows;
+        try { ledgerRows = listImports(targetId, "codex"); }
+        catch (error) {
+          throw writeError(`T3 already contains the exact imported history for Codex session ${plan.thread.sourceSessionId}, but its external ledger could not be checked: ${error instanceof Error ? error.message : String(error)}. No native events were replayed.`, error);
+        }
+        const mapped = ledgerRows.some((row) => row.sourceKey === plan.thread.sourceKey && row.threadId === plan.threadId);
+        if (!mapped) {
+          const sequences = prior.events!.map((event) => event.sequence);
+          const warning = "Recovered the external import ledger from exact native event ownership; the original backup path was not retained.";
+          try {
+            recordImports([v2LedgerRecord(plan, paths, Math.min(...sequences), Math.max(...sequences), "", [warning])]);
+            recoveryWarnings.push(warning);
+          } catch (error) {
+            throw writeError(`T3 already contains the exact imported history for Codex session ${plan.thread.sourceSessionId}, but its external ledger could not be recovered: ${error instanceof Error ? error.message : String(error)}. No native events were replayed.`, error);
+          }
+        }
+      }
     }
   }
 
@@ -693,11 +741,11 @@ async function importNightlyV2(
     events: plan.events.length,
     attachments: 0,
     resumable: plan.resumable,
-    warnings: [...plan.thread.warnings, ...(plan.provider.warning ? [plan.provider.warning] : [])],
+    warnings: [...plan.thread.warnings, ...(plan.provider.warning ? [plan.provider.warning] : []), ...(existing.has(plan.threadId) && recoveryWarnings.length ? ["An external import ledger mapping was recovered for this T3 history."] : [])],
   }));
   const pending = plans.filter((plan) => !existing.has(plan.threadId));
   if (options.dryRun || pending.length === 0) {
-    return { schemaVersion: 1, status: aggregateStatus(results, options.dryRun), target: paths.dbPath, migration: 61, backup: null, results, warnings: [] };
+    return { schemaVersion: 1, status: aggregateStatus(results, options.dryRun), target: paths.dbPath, migration: 61, backup: null, results, warnings: recoveryWarnings };
   }
 
   const backupDb = new Database(paths.dbPath, { fileMustExist: true });
@@ -714,15 +762,6 @@ async function importNightlyV2(
       throw writeError(`${error instanceof Error ? error.message : String(error)} The verified backup is ${backup}.`, error);
     }
     const result = results.find((item) => item.threadId === plan.threadId)!;
-    if (write.outcome === "already-present") {
-      const priorResponse = await callV2Native(paths, { op: "inspect", threadIds: [plan.threadId] });
-      const prior = (priorResponse.threads ?? []).find((thread) => thread.threadId === plan.threadId);
-      if (!v2HistoryMatches(prior, plan)) {
-        throw safetyError(`T3 already has a different task for Codex session ${plan.thread.sourceSessionId}. The verified backup is ${backup}.`);
-      }
-      result.status = "already-imported";
-      continue;
-    }
     const sequenceRange = write.storedSequenceRange ?? (write.firstSequence && write.lastSequence ? { first: write.firstSequence, last: write.lastSequence } : undefined);
     const projection = write.projections?.find((thread) => thread.threadId === plan.threadId);
     const readback: V2ThreadReply | undefined = projection ? {
@@ -734,17 +773,7 @@ async function importNightlyV2(
       throw writeError(`T3 v2 did not return committed event sequences for ${plan.thread.sourceSessionId}. The verified backup is ${backup}.`);
     }
     result.sequence = { first: sequenceRange.first, last: sequenceRange.last };
-    const record: LedgerRecord = {
-      targetId: sha256(canonicalPath(paths.dbPath)), source: "codex",
-      sourceSessionId: plan.thread.sourceSessionId, sourceKey: plan.thread.sourceKey,
-      sourceFingerprint: plan.fingerprint, projectId: plan.projectId, threadId: plan.threadId,
-      importedAt: new Date().toISOString(), importerVersion: IMPORTER_VERSION,
-      migration: 61, firstSequence: sequenceRange.first, lastSequence: sequenceRange.last,
-      resumable: plan.resumable, backupPath: backup, warnings: result.warnings,
-      identitySeed: plan.thread.sourceKey, currentSourceKey: plan.thread.sourceKey,
-      ...(plan.thread.leafId ? { sourceLeafId: plan.thread.leafId } : {}),
-      sourceTitle: plan.thread.title, checkpoint: checkpointForThread(plan.thread), isCanonical: true,
-    };
+    const record = v2LedgerRecord(plan, paths, sequenceRange.first, sequenceRange.last, backup, result.warnings);
     try { recordImports([record]); }
     catch (error) { warnings.push(`Import succeeded, but the external ledger could not be updated: ${error instanceof Error ? error.message : String(error)}`); }
   }

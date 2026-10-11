@@ -49,6 +49,7 @@ function decodeProjectEvent(raw: any) {
 async function inspect(request: any) {
   const program = Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
+    const eventStore = yield* EventStore.EventStoreV2;
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const projectStore = yield* ProjectStore.ProjectStoreV2;
     const migrations = yield* sql`SELECT migration_id AS migrationId, name FROM effect_sql_migrations ORDER BY migration_id`;
@@ -68,7 +69,9 @@ async function inspect(request: any) {
       const threadId = ThreadId.make(rawId);
       const shell = yield* projections.getThreadShell(threadId);
       const records = shell ? yield* projections.getThreadRecords(threadId, ['messages', 'turnItems', 'providerThreads']) : undefined;
-      threads.push({ threadId, exists: shell !== null, ...(shell ? { thread: shell, records } : {}) });
+      const events = shell ? yield* eventStore.read({ threadId }).pipe(Stream.runCollect) : [];
+      threads.push({ threadId, exists: shell !== null,
+        ...(shell ? { thread: shell, records, events: events.map((stored: any) => ({ id: stored.event.id, sequence: stored.sequence })) } : {}) });
     }
     return { ok: true, integrity: integrityRows[0]?.integrity_check ?? 'unknown',
       profile: { migrationRevision: migrations.at(-1)?.migrationId ?? 0,

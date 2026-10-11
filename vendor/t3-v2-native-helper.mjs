@@ -80271,6 +80271,7 @@ function decodeProjectEvent2(raw3) {
 async function inspect2(request) {
   const program = gen2(function* () {
     const sql = yield* SqlClient;
+    const eventStore = yield* EventStoreV2;
     const projections = yield* ProjectionStoreV2;
     const projectStore = yield* ProjectStoreV2;
     const migrations = yield* sql`SELECT migration_id AS migrationId, name FROM effect_sql_migrations ORDER BY migration_id`;
@@ -80290,7 +80291,12 @@ async function inspect2(request) {
       const threadId2 = ThreadId.make(rawId);
       const shell = yield* projections.getThreadShell(threadId2);
       const records = shell ? yield* projections.getThreadRecords(threadId2, ["messages", "turnItems", "providerThreads"]) : void 0;
-      threads.push({ threadId: threadId2, exists: shell !== null, ...shell ? { thread: shell, records } : {} });
+      const events2 = shell ? yield* eventStore.read({ threadId: threadId2 }).pipe(runCollect) : [];
+      threads.push({
+        threadId: threadId2,
+        exists: shell !== null,
+        ...shell ? { thread: shell, records, events: events2.map((stored) => ({ id: stored.event.id, sequence: stored.sequence })) } : {}
+      });
     }
     return {
       ok: true,
