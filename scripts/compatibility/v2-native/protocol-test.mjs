@@ -51,6 +51,8 @@ const dbPath = join(base,'fresh','statev2.sqlite');
 run(nodePath,[fixturePath,dbPath]);
 const before = run(nodePath,[helperPath],JSON.stringify(request(dbPath,'inspect')));
 assert.equal(before.ok,true); assert.equal(before.integrity,'ok'); assert.equal(before.profile.migrationRevision,61);
+assert.equal(before.profile.requiredTablesPresent,true); assert.equal(before.profile.isV2Schema,true);
+assert.equal(before.profile.hasV2ThreadProjectionTable,true);
 const written = run(nodePath,[helperPath],JSON.stringify(request(dbPath,'write',{projectEvent,events})));
 assert.equal(written.ok,true); assert.equal(written.outcome,'written'); assert.equal(written.projectCommitted,true);
 assert.equal(written.storedSequenceRange.first,2); assert.equal(written.storedSequenceRange.last,5);
@@ -59,13 +61,12 @@ assert.equal(written.projections[0].records.providerThreads[0].nativeThreadRef.n
 const after = run(nodePath,[helperPath],JSON.stringify(request(dbPath,'inspect',{threadIds:[threadId]})));
 assert.equal(after.ok,true); assert.equal(after.threads[0].exists,true); assert.equal(after.threads[0].records.messages[0].text,message.text);
 const duplicate = run(nodePath,[helperPath],JSON.stringify(request(dbPath,'write',{projectEvent,events})));
-assert.equal(duplicate.ok,true); assert.equal(duplicate.outcome,'already-present');
+assert.equal(duplicate.ok,false); assert.equal(duplicate.outcome,'existing-thread-conflict');
 const rollbackDb = join(base,'rollback','statev2.sqlite');
 run(nodePath,[fixturePath,rollbackDb]);
 const rollbackConnection = new DatabaseSync(rollbackDb);
 rollbackConnection.exec("CREATE TRIGGER injected_projection_failure BEFORE INSERT ON orchestration_v2_projection_messages BEGIN SELECT RAISE(ABORT, 'injected projection failure'); END");
 rollbackConnection.close();
-const invalidEvents = [events[0], events[1]];
 const rollbackProjectEvent = {
   ...projectEvent,
   commandId: 'command:v2-protocol:rollback',
@@ -76,6 +77,10 @@ const rollbackProjectEvent = {
     payload: { ...projectEvent.event.payload, projectId: rollbackProjectId },
   },
 };
+const invalidEvents = [
+  { ...events[0], payload: { ...thread, projectId: rollbackProjectId } },
+  events[1],
+];
 const failed = run(nodePath, [helperPath], JSON.stringify(request(rollbackDb, 'write', {
   projectEvent: rollbackProjectEvent,
   events: invalidEvents,
@@ -85,5 +90,63 @@ const afterFailure = run(nodePath,[helperPath],JSON.stringify(request(rollbackDb
 assert.equal(afterFailure.ok,true); assert.equal(afterFailure.threads[0].exists,false);
 assert.equal(afterFailure.projects.length, 1);
 assert.equal(afterFailure.projects[0].deletedAt != null, true);
+const deletedAtBeforeReuse = afterFailure.projects[0].deletedAt;
+const tombstoneDb = new DatabaseSync(rollbackDb);
+tombstoneDb.exec('DROP TRIGGER injected_projection_failure');
+const projectCreatedCountBefore = tombstoneDb.prepare(`SELECT COUNT(*) AS count FROM orchestration_events
+  WHERE aggregate_kind = 'project' AND stream_id = ? AND event_type = 'project.created'
+    AND application_event_version = 1`).get(rollbackProjectId).count;
+tombstoneDb.close();
+const tombstoneEvents = events.map((event) => ({
+  ...event,
+  ...(event.threadId ? { threadId } : {}),
+  ...(event.type === 'thread.created' ? { payload: { ...thread, projectId: rollbackProjectId } }
+    : event.type === 'message.updated' ? { payload: message }
+      : event.type === 'turn-item.updated' ? { payload: turnItem }
+        : event.type === 'provider-thread.updated' ? { payload: providerThread } : {}),
+}));
+const resurrectionAttempt = run(nodePath, [helperPath], JSON.stringify(request(rollbackDb, 'write', {
+  projectEvent: rollbackProjectEvent, events: tombstoneEvents,
+})));
+assert.equal(resurrectionAttempt.ok, false);
+const afterReuse = run(nodePath, [helperPath], JSON.stringify(request(rollbackDb, 'inspect', {
+  threadIds: [threadId], projectIds: [rollbackProjectId],
+})));
+assert.equal(afterReuse.threads[0].exists, false);
+assert.equal(afterReuse.projects[0].deletedAt, deletedAtBeforeReuse);
+const verifyNoProjectRecreate = new DatabaseSync(rollbackDb);
+const projectCreatedCountAfter = verifyNoProjectRecreate.prepare(`SELECT COUNT(*) AS count FROM orchestration_events
+  WHERE aggregate_kind = 'project' AND stream_id = ? AND event_type = 'project.created'
+    AND application_event_version = 1`).get(rollbackProjectId).count;
+verifyNoProjectRecreate.close();
+assert.equal(projectCreatedCountAfter, projectCreatedCountBefore);
+async function rejectsBeforeWrite(name, badEvents, badProjectEvent, projectIds = []) {
+  const db = join(base, name, 'statev2.sqlite');
+  run(nodePath, [fixturePath, db]);
+  const rejected = run(nodePath, [helperPath], JSON.stringify(request(db, 'write', {
+    events: badEvents, ...(badProjectEvent ? { projectEvent: badProjectEvent } : {}),
+  })));
+  assert.equal(rejected.ok, false, `${name} must be rejected`);
+  const state = run(nodePath, [helperPath], JSON.stringify(request(db, 'inspect', { threadIds: [threadId], projectIds })));
+  assert.equal(state.threads[0].exists, false, `${name} must not create a thread`);
+  assert.equal(state.projects.length, 0, `${name} must not create a project`);
+}
+await rejectsBeforeWrite('mismatched-thread-envelope', [events[0],
+  { ...events[1], payload: { ...message, threadId: 'import:codex:foreign' } }], undefined);
+await rejectsBeforeWrite('mismatched-created-thread-id', [
+  { ...events[0], payload: { ...thread, id: 'import:codex:foreign' } }, ...events.slice(1),
+], undefined);
+const foreignProjectEvent = { ...projectEvent,
+  event: { ...projectEvent.event, aggregateId: 'project:v2-protocol-other',
+    payload: { ...projectEvent.event.payload, projectId: 'project:v2-protocol-other' } },
+};
+await rejectsBeforeWrite('mismatched-project-identity', events, foreignProjectEvent, ['project:v2-protocol-other']);
+const invalidProjectCommand = { ...projectEvent, commandType: 'project.delete',
+  event: { ...projectEvent.event, type: 'project.deleted',
+    payload: { projectId, deletedAt: baseTime } },
+};
+await rejectsBeforeWrite('invalid-project-command', events, invalidProjectCommand, [projectId]);
 const nodeVersion = spawnSync(nodePath, ['--version'], { encoding: 'utf8' }).stdout.trim();
-console.log(JSON.stringify({result:'PASS',node:nodeVersion,inspect:true,write:true,duplicatePreflight:true,closeReopen:true,rollback:true,projectCompensation:true}));
+console.log(JSON.stringify({result:'PASS',node:nodeVersion,inspect:true,write:true,existingThreadConflict:true,
+  threadEnvelopeValidation:true,projectIdentityValidation:true,projectCreateRestriction:true,
+  tombstonedProjectNotResurrected:true,closeReopen:true,rollback:true,projectCompensation:true}));

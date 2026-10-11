@@ -62,7 +62,7 @@ async function inspect(request: any) {
       if (Option.isSome(project)) projects.push(project.value);
     }
     const tableNames = new Set(tables.map((row: any) => row.name));
-    const required = ['orchestration_events', 'orchestration_v2_projection_metadata', 'projection_threads'];
+    const required = ['orchestration_events', 'orchestration_v2_projection_metadata', 'orchestration_v2_projection_threads'];
     const threads = [];
     for (const rawId of request.threadIds ?? []) {
       const threadId = ThreadId.make(rawId);
@@ -73,6 +73,7 @@ async function inspect(request: any) {
     return { ok: true, integrity: integrityRows[0]?.integrity_check ?? 'unknown',
       profile: { migrationRevision: migrations.at(-1)?.migrationId ?? 0,
         requiredTablesPresent: required.every((table) => tableNames.has(table)),
+        hasV2ThreadProjectionTable: tableNames.has('orchestration_v2_projection_threads'),
         applicationEventVersions: versions.map((row: any) => row.version), isV2Schema: migrations.some((row: any) => row.migrationId === 61) },
       migrations, projectionMetadata: metadata, applicationEventVersions: versions.map((row: any) => row.version), projects, threads };
   });
@@ -86,13 +87,33 @@ async function writeRequest(request: any) {
     throw new Error('write accepts exactly one thread and one thread.created event');
   }
   const threadId = ThreadId.make(threadIds[0]);
+  const threadCreated = events.find((event: any) => event.type === 'thread.created') as any;
+  if (threadCreated.payload.id !== threadId) throw new Error('thread.created payload id does not match its event threadId');
+  for (const event of events as any[]) {
+    if (event.payload?.threadId !== undefined && event.payload.threadId !== event.threadId) {
+      throw new Error(`${event.type} payload threadId does not match its event threadId`);
+    }
+    if (event.type === 'provider-thread.updated' && event.payload.appThreadId !== event.threadId) {
+      throw new Error('provider-thread payload appThreadId does not match its event threadId');
+    }
+  }
   const ids = events.map((event: any) => event.id);
   if (new Set(ids).size !== ids.length) throw new Error('write contains duplicate event IDs');
+  const project = request.projectEvent ? decodeProjectEvent(request.projectEvent) : undefined;
+  if (project && (request.projectEvent.commandType !== 'project.create'
+    || request.projectEvent.event.type !== 'project.created'
+    || request.projectEvent.event.aggregateKind !== 'project'
+    || request.projectEvent.event.payload.projectId !== project.projectId)) {
+    throw new Error('projectEvent must be a consistent project.create / project.created event');
+  }
+  if (project && threadCreated.payload.projectId !== project.projectId) {
+    throw new Error('thread.created projectId does not match projectEvent aggregateId');
+  }
   const preflight = Effect.gen(function* () {
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const sql = yield* SqlClient.SqlClient;
     const shell = yield* projections.getThreadShell(threadId);
-    if (shell) return { outcome: 'already-present', thread: shell };
+    if (shell) return { outcome: 'existing-thread-conflict', thread: shell };
     for (const id of ids) {
       const rows = yield* sql`SELECT event_id FROM orchestration_events WHERE event_id = ${id} LIMIT 1`;
       if (rows.length) throw new Error(`event ID already exists: ${id}`);
@@ -100,13 +121,14 @@ async function writeRequest(request: any) {
     return { outcome: 'new' };
   });
   const existing = await run(preflight, makeLayerFor(request.dbPath, true));
-  if (existing.outcome === 'already-present') return { ok: true, outcome: 'already-present', thread: existing.thread };
+  if (existing.outcome === 'existing-thread-conflict') {
+    return { ok: false, outcome: 'existing-thread-conflict', error: 'thread ID is already present; caller must validate project/source/history identity', existingThread: existing.thread };
+  }
 
-  const project = request.projectEvent ? decodeProjectEvent(request.projectEvent) : undefined;
   if (project) {
     const existingProject = await run(Effect.gen(function* () {
       const store = yield* ProjectStore.ProjectStoreV2;
-      return yield* store.get(project.projectId);
+      return yield* store.get(project.projectId, { includeDeleted: true });
     }), makeLayerFor(request.dbPath, true));
     if (Option.isSome(existingProject)) throw new Error('projectEvent target already exists');
   }

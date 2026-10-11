@@ -51,15 +51,24 @@ helper attempts deterministic `project.deleted` compensation through
 `projectCompensated`; failed compensation remains a partial commit for caller
 recovery.
 
+An existing thread ID returns `existing-thread-conflict` with the current
+native shell. The helper does not treat an ID match as proof of source/history
+identity or authorize skipping the import; the caller must validate those
+attributes before choosing recovery behavior. Before any writes, the helper
+also checks the `thread.created` ID and project against the event envelope,
+checks event payload thread IDs, and restricts the optional project command to
+a new `project.create` / `project.created` pair. Project preflight includes
+deleted rows so a tombstoned project ID is not reused.
+
 The stdin protocol acceptance test runs against the unpacked candidate. It
 writes and reads back a representative thread, message, turn item, and native
-provider-thread binding; verifies same-thread duplicate preflight and
-close/reopen; then installs a test-only SQLite trigger that aborts a projection
+provider-thread binding; verifies existing-thread conflict and identity
+rejections, plus close/reopen; then installs a test-only SQLite trigger that aborts a projection
 write to prove the thread event batch rolls back and project compensation marks
 the project deleted. The trigger is fault injection only; persistence and
 projections use the pinned T3 implementation.
 
-Most recent candidate: 2,992,130 bytes unpacked and 575,819-byte npm tarball,
+Most recent candidate: 2,993,567 bytes unpacked and 576,094-byte npm tarball,
 115 pinned T3 source files, and 94 bundled dependencies. All 94 have nonempty
 license texts (92 MIT, 1 ISC, 1 BSD-2-Clause); the helper's external runtime
 imports are Node built-ins only. The migration runner is separate from the
