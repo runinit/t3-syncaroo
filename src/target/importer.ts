@@ -666,7 +666,7 @@ function v2EventOwnershipMatches(value: V2ThreadReply | undefined, plan: V2Plan)
 
 function v2LedgerRecord(plan: V2Plan, paths: TargetPaths, firstSequence: number, lastSequence: number, backupPath: string, warnings: string[]): LedgerRecord {
   return {
-    targetId: sha256(canonicalPath(paths.dbPath)), source: "codex",
+    targetId: sha256(canonicalPath(paths.dbPath)), source: plan.thread.source,
     sourceSessionId: plan.thread.sourceSessionId, sourceKey: plan.thread.sourceKey,
     sourceFingerprint: plan.fingerprint, projectId: plan.projectId, threadId: plan.threadId,
     importedAt: new Date().toISOString(), importerVersion: IMPORTER_VERSION,
@@ -749,15 +749,15 @@ async function importNightlyV2(
     const prior = inspectedById.get(plan.threadId);
     if (prior?.exists) {
       if (!v2HistoryMatches(prior, plan) || !v2EventOwnershipMatches(prior, plan)) {
-        throw safetyError(`T3 already has a different task for Codex session ${plan.thread.sourceSessionId}. Keep the existing task and resolve the history conflict before importing.`);
+        throw safetyError(`T3 already has a different task for ${plan.thread.source} session ${plan.thread.sourceSessionId}. Keep the existing task and resolve the history conflict before importing.`);
       }
       existing.add(plan.threadId);
       if (!options.dryRun) {
         const targetId = sha256(canonicalPath(paths.dbPath));
         let ledgerRows;
-        try { ledgerRows = listImports(targetId, "codex"); }
+        try { ledgerRows = listImports(targetId, plan.thread.source); }
         catch (error) {
-          throw writeError(`T3 already contains the exact imported history for Codex session ${plan.thread.sourceSessionId}, but its external ledger could not be checked: ${error instanceof Error ? error.message : String(error)}. No native events were replayed.`, error);
+          throw writeError(`T3 already contains the exact imported history for ${plan.thread.source} session ${plan.thread.sourceSessionId}, but its external ledger could not be checked: ${error instanceof Error ? error.message : String(error)}. No native events were replayed.`, error);
         }
         const mapped = ledgerRows.find((row) => row.sourceKey === plan.thread.sourceKey && row.threadId === plan.threadId);
         if (mapped && mapped.sourceFingerprint !== plan.fingerprint) {
@@ -771,7 +771,7 @@ async function importNightlyV2(
             recordImports([v2LedgerRecord(plan, paths, Math.min(...sequences), Math.max(...sequences), "", [warning])]);
             recoveryWarnings.push(warning);
           } catch (error) {
-            throw writeError(`T3 already contains the exact imported history for Codex session ${plan.thread.sourceSessionId}, but its external ledger could not be recovered: ${error instanceof Error ? error.message : String(error)}. No native events were replayed.`, error);
+            throw writeError(`T3 already contains the exact imported history for ${plan.thread.source} session ${plan.thread.sourceSessionId}, but its external ledger could not be recovered: ${error instanceof Error ? error.message : String(error)}. No native events were replayed.`, error);
           }
         }
       }
