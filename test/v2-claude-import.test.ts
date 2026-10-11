@@ -6,6 +6,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { eventCount } from "./helpers.js";
+import { canonicalPath, sha256 } from "../src/core/util.js";
+import { listImports } from "../src/target/ledger.js";
 import { ClaudeSource } from "../src/sources/claude.js";
 import { resolveTargetPaths } from "../src/target/config.js";
 import { importConversations } from "../src/target/importer.js";
@@ -95,6 +97,7 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 Claude i
           plans: Array<{ markdown?: string }>;
           providerThreads: Array<{
             driver: string;
+            providerInstanceId: string;
             nativeThreadRef: { driver: string; nativeId: string; strength: string };
             nativeConversationHeadRef: { driver: string; nativeId: string; strength: string } | null;
           }>;
@@ -114,13 +117,30 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 Claude i
     expect(records.plans.map((plan) => plan.markdown)).toContain(markdown);
     expect(records.providerThreads).toContainEqual(expect.objectContaining({
       driver: "claudeAgent",
+      providerInstanceId: "claudeAgent",
       nativeThreadRef: { driver: "claudeAgent", nativeId: sessionId, strength: "strong" },
       nativeConversationHeadRef: { driver: "claudeAgent", nativeId: "assistant-alternate", strength: "strong" },
     }));
 
+    const targetId = sha256(canonicalPath(dbPath));
+    expect(listImports(targetId, "claude")).toContainEqual(expect.objectContaining({
+      source: "claude",
+      sourceSessionId: sessionId,
+      sourceKey: branch.sourceKey,
+      sourceLeafId: "alternate-user-endpoint",
+      threadId: result.results[0]!.threadId,
+      resumable: true,
+    }));
     const eventTotal = eventCount(dbPath);
     const retry = await importConversations([{ conversation, resume: true }], paths, { dryRun: false, resume: true });
     expect(retry.status).toBe("already-imported");
+    expect(eventCount(dbPath)).toBe(eventTotal);
+
+    await expect(importConversations([{ conversation, resume: true }], paths, {
+      dryRun: false,
+      resume: true,
+      providerInstance: "claudeAgent-alt",
+    })).rejects.toMatchObject({ exitCode: 4, message: expect.stringContaining("different task") });
     expect(eventCount(dbPath)).toBe(eventTotal);
   });
 });
