@@ -62,8 +62,12 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 Claude i
         { type: "tool_result", tool_use_id: "shell-call", content: "/workspace" },
       ] } },
       { ...base, uuid: "assistant-current", parentUuid: "tool-results", type: "assistant", timestamp: "2026-10-01T10:00:03Z", message: { role: "assistant", model: "claude-test", content: [{ type: "text", text: "Current branch answer" }], stop_reason: "end_turn" } },
-      { ...base, uuid: "assistant-alternate", parentUuid: "assistant-tool", type: "assistant", timestamp: "2026-10-01T10:00:04Z", message: { role: "assistant", model: "claude-test", usage: { input_tokens: 80, output_tokens: 20 }, content: [{ type: "text", text: "Alternate branch answer" }], stop_reason: "end_turn" } },
-      { ...base, uuid: "alternate-user-endpoint", parentUuid: "assistant-alternate", type: "user", timestamp: "2026-10-01T10:00:05Z", message: { role: "user", content: "Continue from this saved branch" } },
+      { ...base, uuid: "assistant-alternate", parentUuid: "assistant-tool", type: "assistant", timestamp: "2026-10-01T10:00:04Z", message: { role: "assistant", model: "claude-test", usage: { input_tokens: 80, output_tokens: 20 }, content: [{ type: "text", text: "First alternate response" }], stop_reason: "max_tokens" } },
+      { ...base, uuid: "alternate-user-2", parentUuid: "assistant-alternate", type: "user", timestamp: "2026-10-01T10:00:05Z", message: { role: "user", content: "Try a smaller step" } },
+      { ...base, uuid: "assistant-failed", parentUuid: "alternate-user-2", type: "assistant", timestamp: "2026-10-01T10:00:06Z", message: { role: "assistant", model: "claude-test", content: [{ type: "text", text: "This turn exceeds the context window" }], stop_reason: "model_context_window_exceeded" } },
+      { ...base, uuid: "alternate-user-3", parentUuid: "assistant-failed", type: "user", timestamp: "2026-10-01T10:00:07Z", message: { role: "user", content: "Continue with a fresh turn" } },
+      { ...base, uuid: "assistant-alternate-completed", parentUuid: "alternate-user-3", type: "assistant", timestamp: "2026-10-01T10:00:08Z", message: { role: "assistant", model: "claude-test", content: [{ type: "text", text: "Alternate branch answer" }], stop_reason: "end_turn" } },
+      { ...base, uuid: "alternate-user-endpoint", parentUuid: "assistant-alternate-completed", type: "user", timestamp: "2026-10-01T10:00:09Z", message: { role: "user", content: "Continue from this saved branch" } },
       { ...base, type: "last-prompt", leafUuid: "assistant-current", lastPrompt: "Implement this carefully" },
     ];
     writeFileSync(join(projectDir, `${sessionId}.jsonl`), transcript.map((row) => JSON.stringify(row)).join("\n") + "\n");
@@ -75,7 +79,8 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 Claude i
     expect(conversation.threads).toHaveLength(1);
     const branch = conversation.threads[0]!;
     expect(branch).toMatchObject({ currentBranch: false, leafId: "alternate-user-endpoint" });
-    expect(branch.resumeCursor).toMatchObject({ resume: sessionId, resumeSessionAt: "assistant-alternate" });
+    expect(branch.resumeCursor).toMatchObject({ resume: sessionId, resumeSessionAt: "assistant-alternate-completed" });
+    expect(branch.turns.map((turn) => turn.status)).toEqual(["interrupted", "failed", "completed"]);
     expect(branch.turns[0]!.plans.map((plan) => plan.markdown)).toContain(markdown);
     expect(branch.turns[0]!.activities.map((activity) => activity.kind)).toEqual(expect.arrayContaining([
       "reasoning.summary", "turn.plan.updated", "tool.completed", "context-window.updated",
@@ -93,7 +98,7 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 Claude i
       threads: Array<{
         records: {
           messages: Array<{ role: string; text: string; attachments: Array<{ id: string }> }>;
-          turnItems: Array<{ type: string; text?: string; input?: string; output?: string; steps?: Array<{ text: string }> }>;
+          turnItems: Array<{ type: string; status: string; text?: string; input?: string; output?: string; steps?: Array<{ text: string }> }>;
           plans: Array<{ markdown?: string }>;
           providerThreads: Array<{
             driver: string;
@@ -114,12 +119,14 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 Claude i
     expect(records.turnItems.find((item) => item.type === "todo_list")?.steps?.map((step) => step.text)).toEqual([
       "Inspect the branch", "Preserve its state",
     ]);
+    expect(records.turnItems.map((item) => item.status)).toEqual(expect.arrayContaining(["completed", "interrupted", "failed"]));
+    expect(records.turnItems.some((item) => item.type === "error" && item.status === "failed")).toBe(true);
     expect(records.plans.map((plan) => plan.markdown)).toContain(markdown);
     expect(records.providerThreads).toContainEqual(expect.objectContaining({
       driver: "claudeAgent",
       providerInstanceId: "claudeAgent",
       nativeThreadRef: { driver: "claudeAgent", nativeId: sessionId, strength: "strong" },
-      nativeConversationHeadRef: { driver: "claudeAgent", nativeId: "assistant-alternate", strength: "strong" },
+      nativeConversationHeadRef: { driver: "claudeAgent", nativeId: "assistant-alternate-completed", strength: "strong" },
     }));
 
     const targetId = sha256(canonicalPath(dbPath));
