@@ -5,20 +5,19 @@ import * as Effect from 'effect/Effect';
 import * as Layer from 'effect/Layer';
 import * as Stream from 'effect/Stream';
 import * as DateTime from 'effect/DateTime';
+import * as Option from 'effect/Option';
+import * as Schema from 'effect/Schema';
 import * as SqlClient from 'effect/sql/SqlClient';
-import { ProjectId, ThreadId, ProviderThreadId, MessageId, TurnItemId, EventId } from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/src/baseSchemas.ts';
+import { CommandId, ProjectId, ThreadId, ProviderThreadId, MessageId, TurnItemId, EventId } from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/src/baseSchemas.ts';
 import { ProviderInstanceId, ProviderDriverKind } from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/src/providerInstance.ts';
 import * as EventSink from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/src/orchestration-v2/EventSink.ts';
 import * as EventStore from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/src/orchestration-v2/EventStore.ts';
 import * as ProjectionStore from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/src/orchestration-v2/ProjectionStore.ts';
 import * as ProjectStore from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/src/orchestration-v2/ProjectStore.ts';
+import { ApplicationProjectEvent } from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/src/applicationEvent.ts';
+import { OrchestrationV2DomainEventJson } from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/src/orchestrationV2.ts';
 import * as SqliteClient from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/shared/src/nodeSqliteClient.ts';
 
-const [dbPath] = process.argv.slice(2);
-if (!dbPath) throw new Error('usage: node helper.mjs <synthetic-db-path>');
-await mkdir(dirname(dbPath), { recursive: true });
-const home = dirname(dbPath);
-await writeFile(join(home, '.synthetic-t3-home'), 'Synthetic proof fixture; disposable data only.\n');
 const makeLayer = () => {
   const sql = SqliteClient.layer({ filename: dbPath });
   const stores = Layer.mergeAll(EventStore.layer, ProjectionStore.layer, ProjectStore.layer);
@@ -26,6 +25,160 @@ const makeLayer = () => {
   return Layer.provideMerge(EventSink.layer, storesWithSql);
 };
 const run = (effect: any, layer: any) => Effect.runPromise(Effect.provide(effect, layer));
+const makeLayerFor = (filename: string, readonly = false) => {
+  const sql = SqliteClient.layer({ filename, readonly });
+  const stores = Layer.mergeAll(EventStore.layer, ProjectionStore.layer, ProjectStore.layer);
+  return Layer.provideMerge(EventSink.layer, Layer.provideMerge(stores, sql));
+};
+
+function decodeEvents(input: unknown) {
+  if (!Array.isArray(input) || input.length === 0) throw new Error('write requires a non-empty events array');
+  return input.map((event) => Schema.decodeUnknownSync(OrchestrationV2DomainEventJson)(event));
+}
+
+function decodeProjectEvent(raw: any) {
+  if (!raw || typeof raw !== 'object' || !raw.event || !raw.commandId || !raw.commandType || !raw.acceptedAt) {
+    throw new Error('projectEvent requires commandId, commandType, acceptedAt, and event');
+  }
+  const decoded = Schema.decodeUnknownSync(ApplicationProjectEvent)({ ...raw.event, sequence: raw.event.sequence ?? 0 });
+  const { sequence: _sequence, ...event } = decoded;
+  return { commandId: CommandId.make(raw.commandId), commandType: raw.commandType,
+    acceptedAt: DateTime.makeUnsafe(raw.acceptedAt), projectId: decoded.aggregateId, event };
+}
+
+async function inspect(request: any) {
+  const program = Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const projectStore = yield* ProjectStore.ProjectStoreV2;
+    const migrations = yield* sql`SELECT migration_id AS migrationId, name FROM effect_sql_migrations ORDER BY migration_id`;
+    const tables = yield* sql`SELECT name FROM sqlite_master WHERE type='table'`;
+    const integrityRows = yield* sql`PRAGMA integrity_check`;
+    const versions = yield* sql`SELECT DISTINCT application_event_version AS version FROM orchestration_events ORDER BY version`;
+    const metadata = yield* sql`SELECT projection_name AS projectionName, schema_version AS schemaVersion, last_sequence AS lastSequence FROM orchestration_v2_projection_metadata ORDER BY projection_name`;
+    const projects = [];
+    for (const rawId of request.projectIds ?? []) {
+      const project = yield* projectStore.get(ProjectId.make(rawId), { includeDeleted: true });
+      if (Option.isSome(project)) projects.push(project.value);
+    }
+    const tableNames = new Set(tables.map((row: any) => row.name));
+    const required = ['orchestration_events', 'orchestration_v2_projection_metadata', 'projection_threads'];
+    const threads = [];
+    for (const rawId of request.threadIds ?? []) {
+      const threadId = ThreadId.make(rawId);
+      const shell = yield* projections.getThreadShell(threadId);
+      const records = shell ? yield* projections.getThreadRecords(threadId, ['messages', 'turnItems', 'providerThreads']) : undefined;
+      threads.push({ threadId, exists: shell !== null, ...(shell ? { thread: shell, records } : {}) });
+    }
+    return { ok: true, integrity: integrityRows[0]?.integrity_check ?? 'unknown',
+      profile: { migrationRevision: migrations.at(-1)?.migrationId ?? 0,
+        requiredTablesPresent: required.every((table) => tableNames.has(table)),
+        applicationEventVersions: versions.map((row: any) => row.version), isV2Schema: migrations.some((row: any) => row.migrationId === 61) },
+      migrations, projectionMetadata: metadata, applicationEventVersions: versions.map((row: any) => row.version), projects, threads };
+  });
+  return run(program, makeLayerFor(request.dbPath, true));
+}
+
+async function writeRequest(request: any) {
+  const events = decodeEvents(request.events);
+  const threadIds = [...new Set(events.map((event: any) => event.threadId))];
+  if (threadIds.length !== 1 || events.filter((event: any) => event.type === 'thread.created').length !== 1) {
+    throw new Error('write accepts exactly one thread and one thread.created event');
+  }
+  const threadId = ThreadId.make(threadIds[0]);
+  const ids = events.map((event: any) => event.id);
+  if (new Set(ids).size !== ids.length) throw new Error('write contains duplicate event IDs');
+  const preflight = Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const sql = yield* SqlClient.SqlClient;
+    const shell = yield* projections.getThreadShell(threadId);
+    if (shell) return { outcome: 'already-present', thread: shell };
+    for (const id of ids) {
+      const rows = yield* sql`SELECT event_id FROM orchestration_events WHERE event_id = ${id} LIMIT 1`;
+      if (rows.length) throw new Error(`event ID already exists: ${id}`);
+    }
+    return { outcome: 'new' };
+  });
+  const existing = await run(preflight, makeLayerFor(request.dbPath, true));
+  if (existing.outcome === 'already-present') return { ok: true, outcome: 'already-present', thread: existing.thread };
+
+  const project = request.projectEvent ? decodeProjectEvent(request.projectEvent) : undefined;
+  if (project) {
+    const existingProject = await run(Effect.gen(function* () {
+      const store = yield* ProjectStore.ProjectStoreV2;
+      return yield* store.get(project.projectId);
+    }), makeLayerFor(request.dbPath, true));
+    if (Option.isSome(existingProject)) throw new Error('projectEvent target already exists');
+  }
+  const result = await run(Effect.gen(function* () {
+    const sink = yield* EventSink.EventSinkV2;
+    let projectCommitted = false;
+    if (project) {
+      const committed = yield* sink.commitProjectCommand(project);
+      projectCommitted = committed.committed;
+      if (!committed.committed) throw new Error('project command was not committed');
+    }
+    const storedExit = yield* Effect.match(sink.write({ events }), {
+      onFailure: (error) => ({ _tag: 'Failure' as const, error }),
+      onSuccess: (stored) => ({ _tag: 'Success' as const, stored }),
+    });
+    if (storedExit._tag === 'Failure') {
+      let projectCompensated = false;
+      let compensationError: string | undefined;
+      if (project && projectCommitted) {
+        try {
+          const deletedAt = new Date().toISOString();
+          const deleted = Schema.decodeUnknownSync(ApplicationProjectEvent)({
+            sequence: 0, eventId: `event:compensate:${request.projectEvent.event.eventId}`,
+            aggregateKind: 'project', aggregateId: project.projectId, occurredAt: deletedAt,
+            commandId: null, causationEventId: request.projectEvent.event.eventId, correlationId: null,
+            metadata: {}, type: 'project.deleted', payload: { projectId: project.projectId, deletedAt },
+          });
+          const { sequence: _sequence, ...unsequenced } = deleted;
+          const compensation = yield* sink.commitProjectCommand({
+            commandId: CommandId.make(`command:compensate:${request.projectEvent.commandId}`),
+            commandType: 'project.delete', projectId: project.projectId,
+            acceptedAt: DateTime.makeUnsafe(deletedAt), event: unsequenced,
+          });
+          projectCompensated = compensation.committed;
+        } catch (error) { compensationError = String(error); }
+      }
+      return { ok: false, outcome: 'write-failed', error: String(storedExit.error), projectCommitted,
+        projectCompensated, ...(compensationError ? { compensationError } : {}) };
+    }
+    const stored = storedExit.stored;
+    return { ok: true, outcome: 'written', projectCommitted,
+      storedSequenceRange: { first: stored[0]?.sequence, last: stored.at(-1)?.sequence } };
+  }), makeLayerFor(request.dbPath));
+  if (!result.ok) return result;
+  const readback = await run(Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const snapshot = yield* projections.getThreadSnapshot(threadId);
+    const records = yield* projections.getThreadRecords(threadId, ['messages', 'turnItems', 'providerThreads']);
+    return { snapshot, records };
+  }), makeLayerFor(request.dbPath, true));
+  return { ...result, projections: [{ threadId, ...readback }] };
+}
+
+async function dispatchRequest(request: any) {
+  if (typeof request.dbPath !== 'string' || !request.dbPath) throw new Error('request requires dbPath');
+  if (request.op === 'inspect') return inspect(request);
+  if (request.op === 'write') return writeRequest(request);
+  throw new Error(`unsupported operation: ${request.op}`);
+}
+
+let stdin = '';
+if (!process.stdin.isTTY) for await (const chunk of process.stdin) stdin += chunk;
+if (stdin.trim()) {
+  try { console.log(JSON.stringify(await dispatchRequest(JSON.parse(stdin)))); }
+  catch (error) { console.log(JSON.stringify({ ok: false, error: String(error) })); }
+  process.exit(0);
+}
+const [dbPath] = process.argv.slice(2);
+if (!dbPath) throw new Error('usage: node helper.mjs <synthetic-db-path>');
+await mkdir(dirname(dbPath), { recursive: true });
+const home = dirname(dbPath);
+await writeFile(join(home, '.synthetic-t3-home'), 'Synthetic proof fixture; disposable data only.\n');
 const projectId = ProjectId.make('project:v2-proof');
 const threadId = ThreadId.make('import:codex:session-v2-proof');
 const providerInstanceId = ProviderInstanceId.make('codex');
