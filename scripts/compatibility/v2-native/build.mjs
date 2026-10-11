@@ -206,8 +206,15 @@ const replay = spawnSync(process.execPath, [join(consumer, 'package/helper.mjs')
 if (replay.status !== 0) throw new Error(`Unpacked helper failed:\n${replay.stderr}`);
 const proof = JSON.parse(replay.stdout.trim().split('\n').at(-1));
 if (proof.result !== 'PASS' || !proof.rollback || !proof.closeReopen) throw new Error('Unpacked helper acceptance failed');
+const protocol = run(process.execPath, ['scripts/compatibility/v2-native/protocol-test.mjs',
+  join(consumer, 'package/helper.mjs'), fixture], { cwd: root, env: { ...process.env, NODE_PATH: '' } });
+const protocolProof = JSON.parse(protocol.stdout.trim().split('\n').at(-1));
+if (protocolProof.result !== 'PASS' || !protocolProof.projectCompensation || !protocolProof.closeReopen) {
+  throw new Error('Unpacked stdin protocol acceptance failed');
+}
 console.log(JSON.stringify({ candidate, tarball, packBytes: details.size, unpackedBytes: details.unpackedSize,
   bundledDependencyCount: packageEntries.length, externalRuntimeImports: externals, sourceFileCount: own.length,
   helperSha256: provenance.bundledHelperSha256, allLicenseFilesPresent: packageEntries.every((pkg) => pkg.licenseFiles.length > 0),
   buildInputChecks: 'T3 archive, pnpm lock, traced T3 sources, and esbuild tarballs verified',
-  unpackedConsumerRun: proof.result, consumerDirectory: consumer }, null, 2));
+  unpackedConsumerRun: proof.result, stdinProtocolRun: protocolProof.result, protocolProof,
+  consumerDirectory: consumer }, null, 2));

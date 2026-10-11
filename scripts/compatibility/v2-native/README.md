@@ -38,19 +38,32 @@ matching pinned package integrity, or nonempty license text.
 
 ## Evidence and limits
 
-The unpacked helper uses T3's actual migrations only in the test fixture bundle,
-then uses the pinned T3 EventSinkV2, EventStore, ProjectionStore, ProjectStore,
-contracts, and Node SQLite client to write and read a representative thread,
-message, and native provider-thread binding. It closes and reopens the database,
-checks application event version 2, verifies a synthetic existing-ID preflight,
-and injects a duplicate event ID to prove the sink transaction rolls back the
-whole batch.
+The unpacked helper preserves its positional no-input self-test and accepts one
+JSON request on stdin. `inspect` reads integrity, migration/profile metadata,
+and optional thread projections without migration. `write` decodes supplied
+events with the pinned contracts, preflights thread and event IDs, commits an
+optional new project using `EventSinkV2.commitProjectCommand`, writes exactly
+one thread through `EventSinkV2.write`, then opens a new read-only layer and
+returns native projections. Project commit and thread batch are separate native
+transactions. If the thread batch fails after a new project was committed, the
+helper attempts deterministic `project.deleted` compensation through
+`commitProjectCommand` and reports both `projectCommitted` and
+`projectCompensated`; failed compensation remains a partial commit for caller
+recovery.
 
-Most recent candidate: 2,983,601 bytes unpacked and 573,832-byte npm tarball,
+The stdin protocol acceptance test runs against the unpacked candidate. It
+writes and reads back a representative thread, message, turn item, and native
+provider-thread binding; verifies same-thread duplicate preflight and
+close/reopen; then installs a test-only SQLite trigger that aborts a projection
+write to prove the thread event batch rolls back and project compensation marks
+the project deleted. The trigger is fault injection only; persistence and
+projections use the pinned T3 implementation.
+
+Most recent candidate: 2,992,130 bytes unpacked and 575,819-byte npm tarball,
 115 pinned T3 source files, and 94 bundled dependencies. All 94 have nonempty
 license texts (92 MIT, 1 ISC, 1 BSD-2-Clause); the helper's external runtime
 imports are Node built-ins only. The migration runner is separate from the
-candidate helper. Execution passed with Node 26.11.1. The repository's real
-`npm pack` path and its final installed dependency graph were not tested, nor
-was the Node 22.16 minimum runtime. This proof is not sufficient by itself to
-claim product support.
+candidate helper. The packed-consumer positional and stdin protocol tests pass
+on Node 22.16.0 and Node 26.11.1. The repository's real `npm pack` path and its
+final installed dependency graph have not been tested. This proof is not
+sufficient by itself to claim product support.
