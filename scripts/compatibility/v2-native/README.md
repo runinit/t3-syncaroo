@@ -16,18 +16,23 @@ node scripts/compatibility/v2-native/build.mjs
 ```
 
 Preparation downloads the pinned source material and installs the filtered T3
-workspace dependency graph. The build uses esbuild 0.25.12, emits a
-fixture-only migration runner and the candidate helper under ignored
-`artifacts/v2-native/`, creates an npm tarball, extracts it to a fresh consumer
-folder, migrates a synthetic database with the fixture runner, then runs the
-packed helper with `NODE_PATH` empty. The helper has no runtime npm dependencies;
-its traced runtime externals are Node built-ins, including `node:sqlite`.
+workspace dependency graph. The build verifies the pinned T3 release archive,
+pnpm lockfile, every traced T3 source file, and the exact esbuild/npm tarball
+integrities in `source-lock.json` and `build-tool-lock.json`. This build-tool
+lock currently covers Linux x64 only. The build emits a fixture-only migration
+runner and candidate helper under ignored `artifacts/v2-native/`, creates an
+npm tarball, extracts it into a fresh consumer folder, migrates a synthetic
+database with the fixture runner, then runs the packed helper with `NODE_PATH`
+empty. The helper has no runtime npm dependencies; its traced runtime externals
+are Node built-ins, including `node:sqlite`.
 
 `LICENSES.md` and `vendor-manifest.json` are generated alongside this source.
-The manifest records the pinned source commit, the downloaded release archive
-SHA-256, bundled helper SHA-256, traced pinned T3 source files, dependency
-versions and license identifiers. The included third-party notices contain the
-license texts found in the traced dependency closure.
+The manifest records the pinned source and lockfile hashes, helper hash, traced
+T3 source files, each dependency's exact pnpm-lock integrity, license metadata,
+and hashes of included license files. The notice file includes the T3 MIT
+license and every actual license text file found in the traced dependency
+packages. The build fails if a package has no version, declared license,
+matching pinned package integrity, or nonempty license text.
 
 ## Evidence and limits
 
@@ -39,10 +44,11 @@ checks application event version 2, verifies a synthetic existing-ID preflight,
 and injects a duplicate event ID to prove the sink transaction rolls back the
 whole batch.
 
-Most recent candidate: 2,854,038 bytes unpacked, 563,719-byte npm tarball,
-115 pinned T3 source files, and 94 bundled dependencies (92 MIT, 1 ISC, 1
-BSD-2-Clause). The migration runner is separate from the candidate helper.
-Execution passed with Node 26.11.1. The repository's real `npm pack` path and
-its final installed dependency graph were not tested, nor was the Node 22.16
-minimum runtime. This proof is not sufficient by itself to claim product
-support.
+Most recent candidate: 2,983,601 bytes unpacked and 573,832-byte npm tarball,
+115 pinned T3 source files, and 94 bundled dependencies. All 94 have nonempty
+license texts (92 MIT, 1 ISC, 1 BSD-2-Clause); the helper's external runtime
+imports are Node built-ins only. The migration runner is separate from the
+candidate helper. Execution passed with Node 26.11.1. The repository's real
+`npm pack` path and its final installed dependency graph were not tested, nor
+was the Node 22.16 minimum runtime. This proof is not sufficient by itself to
+claim product support.

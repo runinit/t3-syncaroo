@@ -1,0 +1,16 @@
+{
+  "packages": [
+    {
+      "name": "esbuild",
+      "version": "0.25.12",
+      "filename": "esbuild-0.25.12.tgz",
+      "integrity": "sha512-bbPBYYrtZbkt6Os6FiTLCTFxvq4tt3JKall1vRwshA3fdVztsLAatFaZobhkBC8/BrPetoa0oksYoKXoG4ryJg=="
+    },
+    {
+      "name": "@esbuild/linux-x64",
+      "version": "0.25.12",
+      "filename": "esbuild-linux-x64-0.25.12.tgz",
+      "integrity": "sha512-uqZMTLr/zR/ed4jIGnwSLkaHmPjOjJvnm6TVVitAa08SLS9Z0VM8wIRx7gWbJB5/J54YuIMInDquWyYvQLZkgw=="
+    }
+  ]
+}
