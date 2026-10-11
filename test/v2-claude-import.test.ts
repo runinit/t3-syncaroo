@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
+import { eventCount } from "./helpers.js";
 import { ClaudeSource } from "../src/sources/claude.js";
 import { resolveTargetPaths } from "../src/target/config.js";
 import { importConversations } from "../src/target/importer.js";
@@ -105,7 +106,7 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 Claude i
     expect(records.messages[0]!.attachments).toHaveLength(1);
     expect(readFileSync(join(attachmentsDir, `${records.messages[0]!.attachments[0]!.id}.png`))).toEqual(imageBytes);
     expect(records.turnItems.map((item) => item.type)).toEqual(expect.arrayContaining([
-      "reasoning", "todo_list", "proposed_plan", "command_execution", "system_notice",
+      "reasoning", "todo_list", "proposed_plan", "dynamic_tool", "system_notice",
     ]));
     expect(records.turnItems.find((item) => item.type === "todo_list")?.steps?.map((step) => step.text)).toEqual([
       "Inspect the branch", "Preserve its state",
@@ -116,5 +117,10 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 Claude i
       nativeThreadRef: { driver: "claudeAgent", nativeId: sessionId, strength: "strong" },
       nativeConversationHeadRef: { driver: "claudeAgent", nativeId: "assistant-alternate", strength: "strong" },
     }));
+
+    const eventTotal = eventCount(dbPath);
+    const retry = await importConversations([{ conversation, resume: true }], paths, { dryRun: false, resume: true });
+    expect(retry.status).toBe("already-imported");
+    expect(eventCount(dbPath)).toBe(eventTotal);
   });
 });
