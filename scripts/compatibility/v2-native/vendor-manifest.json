@@ -1,0 +1,597 @@
+{
+  "t3SourceCommit": "ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e",
+  "t3ReleaseArchiveSha256": "88914520008d33477f78b15f86346958c4422bc5806effa76761f97344fd2e65",
+  "bundledHelperSha256": "f1ba41f4df406e6e14e8d2f6f3db67d7a9784645b7dd161855fed62e337cb58c",
+  "esbuildVersion": "0.25.12",
+  "nodeTarget": "node22",
+  "sourceFiles": [
+    "apps/server/src/attachmentPaths.ts",
+    "apps/server/src/attachmentStore.ts",
+    "apps/server/src/imageMime.ts",
+    "apps/server/src/orchestration-v2/CommandReceiptStore.ts",
+    "apps/server/src/orchestration-v2/EffectOutbox.ts",
+    "apps/server/src/orchestration-v2/EventSink.ts",
+    "apps/server/src/orchestration-v2/EventStore.ts",
+    "apps/server/src/orchestration-v2/LiveStreamBudget.ts",
+    "apps/server/src/orchestration-v2/ProjectStore.ts",
+    "apps/server/src/orchestration-v2/ProjectionStore.ts",
+    "apps/server/src/orchestration-v2/ThreadFind.ts",
+    "apps/server/src/orchestration-v2/TurnItemPositionStore.ts",
+    "apps/server/src/orchestration-v2/WireProjection.ts",
+    "apps/server/src/orchestration-v2/threadHistoryPaging.ts",
+    "apps/server/src/persistence/Errors.ts",
+    "apps/server/src/persistence/OrchestrationCommandReceipts.ts",
+    "apps/server/src/persistence/OrchestrationEventStore.ts",
+    "apps/server/src/serverActivation.ts",
+    "packages/contracts/src/acpRegistry.ts",
+    "packages/contracts/src/agentSessions.ts",
+    "packages/contracts/src/applicationEvent.ts",
+    "packages/contracts/src/assets.ts",
+    "packages/contracts/src/assistantCitations.ts",
+    "packages/contracts/src/auth.ts",
+    "packages/contracts/src/background.ts",
+    "packages/contracts/src/baseSchemas.ts",
+    "packages/contracts/src/browserImport.ts",
+    "packages/contracts/src/browserProfile.ts",
+    "packages/contracts/src/chatAttachment.ts",
+    "packages/contracts/src/checkpointDiff.ts",
+    "packages/contracts/src/clientRpcPermissions.ts",
+    "packages/contracts/src/composerContext.ts",
+    "packages/contracts/src/composerContextClipboard.ts",
+    "packages/contracts/src/desktopAppActivation.ts",
+    "packages/contracts/src/desktopBootstrap.ts",
+    "packages/contracts/src/desktopBrowser.ts",
+    "packages/contracts/src/device.ts",
+    "packages/contracts/src/editor.ts",
+    "packages/contracts/src/environment.ts",
+    "packages/contracts/src/environmentHttp.ts",
+    "packages/contracts/src/filesystem.ts",
+    "packages/contracts/src/git.ts",
+    "packages/contracts/src/index.ts",
+    "packages/contracts/src/ipc.ts",
+    "packages/contracts/src/keybindings.ts",
+    "packages/contracts/src/mcpApps.ts",
+    "packages/contracts/src/model.ts",
+    "packages/contracts/src/modelSelection.ts",
+    "packages/contracts/src/orchestrationDispatch.ts",
+    "packages/contracts/src/orchestrationProject.ts",
+    "packages/contracts/src/orchestrationV2.ts",
+    "packages/contracts/src/orchestratorMcp.ts",
+    "packages/contracts/src/preview.ts",
+    "packages/contracts/src/previewAutomation.ts",
+    "packages/contracts/src/project.ts",
+    "packages/contracts/src/projectClone.ts",
+    "packages/contracts/src/provider.ts",
+    "packages/contracts/src/providerInstance.ts",
+    "packages/contracts/src/providerPolicy.ts",
+    "packages/contracts/src/providerRuntime.ts",
+    "packages/contracts/src/providerSetup.ts",
+    "packages/contracts/src/providerUsageLimits.ts",
+    "packages/contracts/src/pullRequest.ts",
+    "packages/contracts/src/pullRequestReviewGuide.ts",
+    "packages/contracts/src/relay.ts",
+    "packages/contracts/src/relayClient.ts",
+    "packages/contracts/src/remoteAccess.ts",
+    "packages/contracts/src/resourceTelemetry.ts",
+    "packages/contracts/src/review.ts",
+    "packages/contracts/src/rpc.ts",
+    "packages/contracts/src/scheduledTask.ts",
+    "packages/contracts/src/secretRequest.ts",
+    "packages/contracts/src/server.ts",
+    "packages/contracts/src/settings.ts",
+    "packages/contracts/src/sourceControl.ts",
+    "packages/contracts/src/t3ProjectFile.ts",
+    "packages/contracts/src/terminal.ts",
+    "packages/contracts/src/threadMetadataMcp.ts",
+    "packages/contracts/src/threadPullRequest.ts",
+    "packages/contracts/src/threadSearch.ts",
+    "packages/contracts/src/threadTitle.ts",
+    "packages/contracts/src/usage.ts",
+    "packages/contracts/src/usageLimitSourceId.ts",
+    "packages/contracts/src/vcs.ts",
+    "packages/contracts/src/worktreeMcp.ts",
+    "packages/contracts/src/worktreeSetup.ts",
+    "packages/shared/src/assistantCitations.ts",
+    "packages/shared/src/changeRequestUrl.ts",
+    "packages/shared/src/codexArtifactTemplates.ts",
+    "packages/shared/src/codexFileCitations.ts",
+    "packages/shared/src/codexMarkdownDirectives.ts",
+    "packages/shared/src/composerContextLegacy.ts",
+    "packages/shared/src/composerContextReferences.ts",
+    "packages/shared/src/fileLinks.ts",
+    "packages/shared/src/htmlRender.ts",
+    "packages/shared/src/inlineSkills.ts",
+    "packages/shared/src/markdownGithubAlerts.ts",
+    "packages/shared/src/markdownLinks.ts",
+    "packages/shared/src/markdownListIndentation.ts",
+    "packages/shared/src/markdownPipeline.ts",
+    "packages/shared/src/mcpApp.ts",
+    "packages/shared/src/nodeSqliteClient.ts",
+    "packages/shared/src/orchestrationV2PendingBackgroundWork.ts",
+    "packages/shared/src/orchestrationV2ThreadError.ts",
+    "packages/shared/src/orchestrationV2Timeline.ts",
+    "packages/shared/src/path.ts",
+    "packages/shared/src/proposedPlanText.ts",
+    "packages/shared/src/sourceControl.ts",
+    "packages/shared/src/t3McpToolPresentation.ts",
+    "packages/shared/src/themePalettes.ts",
+    "packages/shared/src/threadFindText.ts",
+    "packages/shared/src/threadLinks.ts",
+    "packages/shared/src/threadPullRequests.ts",
+    "packages/shared/src/threadSearch.ts",
+    "packages/shared/src/toolOutput.ts"
+  ],
+  "bundledDependencyCount": 94,
+  "bundledDependencyLicenses": [
+    {
+      "name": "@ungap/structured-clone",
+      "version": "1.4.0",
+      "license": "ISC"
+    },
+    {
+      "name": "bail",
+      "version": "2.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "ccount",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "character-entities",
+      "version": "2.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "character-entities-html4",
+      "version": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "character-entities-legacy",
+      "version": "3.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "character-reference-invalid",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "comma-separated-tokens",
+      "version": "2.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "decode-named-character-reference",
+      "version": "1.3.0",
+      "license": "MIT"
+    },
+    {
+      "name": "devlop",
+      "version": "1.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "effect",
+      "version": "4.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "entities",
+      "version": "6.0.1",
+      "license": "BSD-2-Clause"
+    },
+    {
+      "name": "escape-string-regexp",
+      "version": "5.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "extend",
+      "version": "3.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "hast-util-from-parse5",
+      "version": "8.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "hast-util-parse-selector",
+      "version": "4.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "hast-util-raw",
+      "version": "9.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "hast-util-sanitize",
+      "version": "5.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "hast-util-to-parse5",
+      "version": "8.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "hastscript",
+      "version": "9.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "html-void-elements",
+      "version": "3.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "is-alphabetical",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "is-alphanumerical",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "is-decimal",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "is-hexadecimal",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "is-plain-obj",
+      "version": "4.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "longest-streak",
+      "version": "3.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "markdown-table",
+      "version": "3.0.4",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-directive",
+      "version": "3.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-find-and-replace",
+      "version": "3.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-from-markdown",
+      "version": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-gfm",
+      "version": "3.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-gfm-autolink-literal",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-gfm-footnote",
+      "version": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-gfm-strikethrough",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-gfm-table",
+      "version": "2.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-gfm-task-list-item",
+      "version": "2.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-newline-to-break",
+      "version": "2.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-phrasing",
+      "version": "4.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-to-hast",
+      "version": "13.2.1",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-to-markdown",
+      "version": "2.2.0",
+      "license": "MIT"
+    },
+    {
+      "name": "mdast-util-to-string",
+      "version": "4.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark",
+      "version": "4.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-core-commonmark",
+      "version": "2.0.4",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-extension-directive",
+      "version": "4.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-extension-gfm",
+      "version": "3.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-extension-gfm-autolink-literal",
+      "version": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-extension-gfm-footnote",
+      "version": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-extension-gfm-strikethrough",
+      "version": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-extension-gfm-table",
+      "version": "2.1.2",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-extension-gfm-tagfilter",
+      "version": "2.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-extension-gfm-task-list-item",
+      "version": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-factory-destination",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-factory-label",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-factory-space",
+      "version": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-factory-title",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-factory-whitespace",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-character",
+      "version": "2.1.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-chunked",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-classify-character",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-combine-extensions",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-decode-numeric-character-reference",
+      "version": "2.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-decode-string",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-edit-map",
+      "version": "1.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-encode",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-html-tag-name",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-normalize-identifier",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-resolve-all",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-sanitize-uri",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "micromark-util-subtokenize",
+      "version": "2.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "parse-entities",
+      "version": "4.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "parse5",
+      "version": "7.3.0",
+      "license": "MIT"
+    },
+    {
+      "name": "property-information",
+      "version": "7.2.0",
+      "license": "MIT"
+    },
+    {
+      "name": "rehype-raw",
+      "version": "7.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "rehype-sanitize",
+      "version": "6.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "remark-breaks",
+      "version": "4.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "remark-gfm",
+      "version": "4.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "remark-parse",
+      "version": "11.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "remark-rehype",
+      "version": "11.1.2",
+      "license": "MIT"
+    },
+    {
+      "name": "space-separated-tokens",
+      "version": "2.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "stringify-entities",
+      "version": "4.0.4",
+      "license": "MIT"
+    },
+    {
+      "name": "trim-lines",
+      "version": "3.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "trough",
+      "version": "2.2.0",
+      "license": "MIT"
+    },
+    {
+      "name": "unified",
+      "version": "11.0.5",
+      "license": "MIT"
+    },
+    {
+      "name": "unist-util-is",
+      "version": "6.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "unist-util-position",
+      "version": "5.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "unist-util-stringify-position",
+      "version": "4.0.0",
+      "license": "MIT"
+    },
+    {
+      "name": "unist-util-visit",
+      "version": "5.1.0",
+      "license": "MIT"
+    },
+    {
+      "name": "unist-util-visit-parents",
+      "version": "6.0.2",
+      "license": "MIT"
+    },
+    {
+      "name": "vfile",
+      "version": "6.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "vfile-location",
+      "version": "5.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "vfile-message",
+      "version": "4.0.3",
+      "license": "MIT"
+    },
+    {
+      "name": "web-namespaces",
+      "version": "2.0.1",
+      "license": "MIT"
+    },
+    {
+      "name": "zwitch",
+      "version": "2.0.4",
+      "license": "MIT"
+    }
+  ]
+}
