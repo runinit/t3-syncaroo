@@ -185,10 +185,113 @@ async function writeRequest(request: any) {
   return { ...result, projections: [{ threadId, ...readback }] };
 }
 
+const sameNativeRef = (actual: any, expected: any) => actual === null || expected === null
+  ? actual === expected
+  : actual?.driver === expected?.driver && actual?.nativeId === expected?.nativeId && actual?.strength === expected?.strength;
+
+function appendConflict(reason: string, message: string) {
+  return { ok: false, outcome: 'append-conflict', reason, error: message };
+}
+
+async function appendRequest(request: any) {
+  const requiredStrings = ['threadId', 'projectId', 'providerInstanceId', 'providerThreadId', 'driver'];
+  if (requiredStrings.some((key) => typeof request[key] !== 'string' || request[key].length === 0)
+    || !Object.hasOwn(request, 'nativeThreadRef') || !Object.hasOwn(request, 'expectedConversationHeadRef')) {
+    return appendConflict('invalid-identity', 'append requires complete expected thread and provider identity');
+  }
+  if (request.nativeThreadRef !== null && (request.nativeThreadRef?.driver !== request.driver
+    || request.nativeThreadRef?.strength !== 'strong' || typeof request.nativeThreadRef?.nativeId !== 'string')) {
+    return appendConflict('invalid-native-thread-reference', 'nativeThreadRef must be null or a matching strong reference');
+  }
+  const expectedHead = request.expectedConversationHeadRef;
+  if (expectedHead !== null && (expectedHead?.driver !== request.driver || expectedHead?.strength !== 'strong'
+    || typeof expectedHead?.nativeId !== 'string')) {
+    return appendConflict('invalid-conversation-head-reference', 'expectedConversationHeadRef must be null or a matching strong reference');
+  }
+  if (request.nativeThreadRef === null && expectedHead !== null) {
+    return appendConflict('invalid-conversation-head-reference', 'a null nativeThreadRef cannot have a conversation head');
+  }
+
+  let events: any[];
+  try { events = decodeEvents(request.events); }
+  catch (error) { return appendConflict('invalid-events', String(error)); }
+  const threadId = ThreadId.make(request.threadId);
+  const allowedTypes = new Set(['message.updated', 'turn-item.updated', 'plan.updated', 'provider-thread.updated']);
+  if (events.some((event: any) => !allowedTypes.has(event.type))) {
+    return appendConflict('forbidden-event-type', 'append only accepts message, turn-item, plan, and provider-thread updates');
+  }
+  if (events.filter((event: any) => event.type === 'provider-thread.updated').length > 1) {
+    return appendConflict('ambiguous-provider-thread-update', 'append accepts at most one provider-thread update');
+  }
+  for (const event of events as any[]) {
+    if (event.threadId !== threadId || (event.payload?.threadId !== undefined && event.payload.threadId !== threadId)
+      || (event.payload?.projectId !== undefined && event.payload.projectId !== request.projectId)
+      || (event.providerInstanceId !== undefined && event.providerInstanceId !== request.providerInstanceId)
+      || (event.driver !== undefined && event.driver !== request.driver)
+      || (event.payload?.providerInstanceId !== undefined && event.payload.providerInstanceId !== request.providerInstanceId)
+      || (event.payload?.providerThreadId != null && event.payload.providerThreadId !== request.providerThreadId)) {
+      return appendConflict('event-identity-mismatch', 'append event identity does not match the expected thread/project/provider');
+    }
+    if (event.type === 'provider-thread.updated') {
+      const binding = event.payload;
+      const desiredHead = binding.nativeConversationHeadRef;
+      if (binding.id !== request.providerThreadId || binding.appThreadId !== threadId
+        || binding.driver !== request.driver || binding.providerInstanceId !== request.providerInstanceId
+        || !sameNativeRef(binding.nativeThreadRef, request.nativeThreadRef)
+        || (request.nativeThreadRef === null && desiredHead !== null)
+        || (desiredHead !== null && (desiredHead?.driver !== request.driver || desiredHead?.strength !== 'strong'
+          || typeof desiredHead?.nativeId !== 'string'))) {
+        return appendConflict('provider-thread-update-mismatch', 'provider-thread update must retain the active source reference and use a strong or null conversation head');
+      }
+    }
+  }
+  const ids = events.map((event: any) => event.id);
+  if (new Set(ids).size !== ids.length) return appendConflict('duplicate-event-id', 'append request contains duplicate event IDs');
+
+  const preflight = await run(Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const sql = yield* SqlClient.SqlClient;
+    const shell = yield* projections.getThreadShell(threadId);
+    if (!shell || shell.deletedAt != null) return { conflict: 'thread-not-live' as const };
+    if (shell.id !== threadId || shell.projectId !== ProjectId.make(request.projectId)
+      || shell.providerInstanceId !== request.providerInstanceId
+      || shell.activeProviderThreadId !== request.providerThreadId) return { conflict: 'thread-identity-mismatch' as const };
+    const records = yield* projections.getThreadRecords(threadId, ['providerThreads']);
+    const bindings = records.providerThreads.filter((binding: any) => binding.id === request.providerThreadId);
+    if (bindings.length !== 1) return { conflict: 'provider-binding-ambiguous' as const };
+    const binding = bindings[0] as any;
+    if (binding.appThreadId !== threadId || binding.providerInstanceId !== request.providerInstanceId
+      || binding.driver !== request.driver || !sameNativeRef(binding.nativeThreadRef, request.nativeThreadRef)
+      || !sameNativeRef(binding.nativeConversationHeadRef, expectedHead)) return { conflict: 'provider-identity-mismatch' as const };
+    for (const id of ids) {
+      const rows = yield* sql`SELECT event_id FROM orchestration_events WHERE event_id = ${id} LIMIT 1`;
+      if (rows.length) return { conflict: 'event-id-exists' as const };
+    }
+    return { conflict: null, shell };
+  }), makeLayerFor(request.dbPath, true));
+  if (preflight.conflict) return appendConflict(preflight.conflict, `append preflight conflict: ${preflight.conflict}`);
+
+  const written = await run(Effect.match(
+    Effect.flatMap(EventSink.EventSinkV2, (sink) => sink.write({ events })),
+    { onFailure: (error) => ({ ok: false as const, outcome: 'write-failed' as const, error: String(error) }),
+      onSuccess: (stored) => ({ ok: true as const, outcome: 'appended' as const,
+        storedSequenceRange: { first: stored[0]?.sequence, last: stored.at(-1)?.sequence } }) },
+  ), makeLayerFor(request.dbPath));
+  if (!written.ok) return { ...written, threadId };
+  const readback = await run(Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const snapshot = yield* projections.getThreadSnapshot(threadId);
+    const records = yield* projections.getThreadRecords(threadId, ['messages', 'turnItems', 'plans', 'providerThreads', 'providerTurns']);
+    return { snapshot, records };
+  }), makeLayerFor(request.dbPath, true));
+  return { ...written, threadId, projections: [{ threadId, ...readback }] };
+}
+
 async function dispatchRequest(request: any) {
   if (typeof request.dbPath !== 'string' || !request.dbPath) throw new Error('request requires dbPath');
   if (request.op === 'inspect') return inspect(request);
   if (request.op === 'write') return writeRequest(request);
+  if (request.op === 'append') return appendRequest(request);
   throw new Error(`unsupported operation: ${request.op}`);
 }
 
