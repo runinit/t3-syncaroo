@@ -190,6 +190,7 @@ describe("source adapters", () => {
       { ...base, uuid: "r1", parentUuid: "t1", type: "user", timestamp: "2026-01-01T00:00:04Z", cwd: workspace, isSidechain: false, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "call-1", content: "one-result" }] } },
       { ...base, uuid: "r2", parentUuid: "t2", type: "user", timestamp: "2026-01-01T00:00:05Z", cwd: workspace, isSidechain: false, message: { role: "user", content: [{ type: "tool_result", tool_use_id: "call-2", content: "two-result" }] } },
       { ...base, uuid: "alternate", parentUuid: "metadata", type: "assistant", timestamp: "2026-01-01T00:00:05.500Z", cwd: workspace, isSidechain: false, message: { role: "assistant", model: "claude-test", content: [{ type: "text", text: "Historical answer" }], stop_reason: "end_turn" } },
+      { ...base, uuid: "alternate-next", parentUuid: "alternate", type: "user", timestamp: "2026-01-01T00:00:05.750Z", cwd: workspace, isSidechain: false, message: { role: "user", content: "An unanswered prompt on the alternate branch" } },
       { ...base, type: "last-prompt", leafUuid: "r2", lastPrompt: "Build it" },
       { ...base, uuid: "done", parentUuid: "r2", type: "assistant", timestamp: "2026-01-01T00:00:06Z", cwd: workspace, isSidechain: false, message: { role: "assistant", model: "claude-test", content: [{ type: "text", text: "Done" }], stop_reason: "end_turn" } },
     ]);
@@ -204,9 +205,35 @@ describe("source adapters", () => {
     const historical = conversation.threads.find((thread) => !thread.currentBranch)!;
     expect(current.turns[0]!.activities.map((item) => item.sourceId)).toEqual(expect.arrayContaining(["call-1", "call-2"]));
     expect(current.resumeCursor).toMatchObject({ resume: sessionId, resumeSessionAt: "done", turnCount: 1 });
-    expect(historical.resumeCursor).toBeUndefined();
+    expect(historical.resumeCursor).toMatchObject({ resume: sessionId, resumeSessionAt: "alternate", turnCount: 2 });
+    expect(historical.leafId).toBe("alternate-next");
     expect(historical.title).toContain("historical");
-    expect(historical.warnings[0]).toContain("Historical Claude branch");
+    expect(historical.warnings[0]).toContain("Alternate Claude branch");
+  });
+
+  it("does not guess Claude's active branch when last-prompt is missing or stale", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-claude-ambiguous-"));
+    const workspace = join(root, "workspace");
+    const project = join(root, "projects", "fixture");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(project, { recursive: true });
+    process.env.CLAUDE_CONFIG_DIR = root;
+    const sessionId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const base = { sessionId, cwd: workspace, isSidechain: false };
+    jsonl(join(project, `${sessionId}.jsonl`), [
+      { ...base, uuid: "u", parentUuid: null, type: "user", timestamp: "2026-01-01T00:00:00Z", message: { content: "Build it" } },
+      { ...base, uuid: "a", parentUuid: "u", type: "assistant", timestamp: "2026-01-01T00:00:01Z", message: { content: [{ type: "text", text: "First answer" }], stop_reason: "end_turn" } },
+      { ...base, uuid: "b", parentUuid: "u", type: "assistant", timestamp: "2026-01-01T00:00:02Z", message: { content: [{ type: "text", text: "Other answer" }], stop_reason: "end_turn" } },
+      { ...base, type: "last-prompt", leafUuid: "missing-leaf", lastPrompt: "Build it" },
+    ]);
+
+    const adapter = new ClaudeSource();
+    const summary = (await adapter.discover({ workspace }))[0]!;
+    const conversation = await adapter.load(summary, {});
+    expect(conversation.threads).toHaveLength(2);
+    expect(conversation.threads.every((thread) => !thread.currentBranch)).toBe(true);
+    expect(conversation.threads.every((thread) => thread.warnings[0]?.includes("active branch is ambiguous"))).toBe(true);
+    expect(conversation.threads.map((thread) => thread.resumeCursor?.resumeSessionAt).sort()).toEqual(["a", "b"]);
   });
 
   it("relinks a successful API retry and an automatic compaction into one Claude thread", async () => {

@@ -37,6 +37,7 @@ interface ClaudeMetadata {
   nodes: Map<string, ClaudeNode>;
   leaves: ClaudeNode[];
   currentLeaf: ClaudeNode;
+  currentLeafTrusted: boolean;
   model: string;
   effort?: string;
   gitBranch?: string;
@@ -293,15 +294,15 @@ function analyze(rows: unknown[], fallbackTime: string): ClaudeMetadata {
     ),
   );
   if (leaves.length === 0) throw sourceError(`Claude transcript ${sessionId} has no conversation leaf`);
-  let currentLeaf = currentLeafId
-    ? leaves
-        .filter((leaf) => isAncestor(nodes, currentLeafId!, leaf))
-        .toSorted((a, b) => b.timestamp.localeCompare(a.timestamp))[0]
-    : undefined;
-  currentLeaf ??= leaves.toSorted((a, b) => b.timestamp.localeCompare(a.timestamp))[0]!;
+  const markedLeaves = currentLeafId
+    ? leaves.filter((leaf) => isAncestor(nodes, currentLeafId, leaf))
+    : [];
+  const currentLeafTrusted = leaves.length === 1 || markedLeaves.length === 1;
+  const currentLeaf = (markedLeaves.length === 1 ? markedLeaves[0] : undefined)
+    ?? leaves.toSorted((a, b) => b.timestamp.localeCompare(a.timestamp))[0]!;
   const firstUser = mainNodes.find((node) => node.type === "user" && isConversationEndpoint(node));
   title = title ?? deriveTitle(firstUser ? textFromContent(messageContent(firstUser.row)) : "Claude conversation");
-  return { sessionId, workspace, title, createdAt, updatedAt, nodes, leaves, currentLeaf, model, ...(effort ? { effort } : {}), ...(gitBranch ? { gitBranch } : {}) };
+  return { sessionId, workspace, title, createdAt, updatedAt, nodes, leaves, currentLeaf, currentLeafTrusted, model, ...(effort ? { effort } : {}), ...(gitBranch ? { gitBranch } : {}) };
 }
 
 function lineage(metadata: ClaudeMetadata, leaf: ClaudeNode): ClaudeNode[] {
@@ -516,9 +517,13 @@ function buildThread(metadata: ClaudeMetadata, leaf: ClaudeNode, branchIndex: nu
     .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
   for (const node of trailingControlNodes) applyControlNode(node);
   if (active) turns.push(active);
-  const currentBranch = leaf.uuid === metadata.currentLeaf.uuid;
+  const currentBranch = metadata.currentLeafTrusted && leaf.uuid === metadata.currentLeaf.uuid;
   const branchSuffix = currentBranch || metadata.leaves.length === 1 ? "" : ` · historical ${branchIndex + 1}`;
-  const warnings = currentBranch ? [] : ["Historical Claude branch: new prompts will not resume this branch's provider context."];
+  const warnings = !metadata.currentLeafTrusted && metadata.leaves.length > 1
+    ? ["Claude's active branch is ambiguous because the saved last-prompt marker does not identify one branch."]
+    : currentBranch
+      ? []
+      : ["Alternate Claude branch selected; continuation uses this branch's saved assistant head."];
   if (!turns.length) throw sourceError(`Claude branch ${leaf.uuid} contains no user turns`);
   return {
     source: "claude",
@@ -534,7 +539,7 @@ function buildThread(metadata: ClaudeMetadata, leaf: ClaudeNode, branchIndex: nu
     createdAt: turns[0]!.startedAt,
     updatedAt: turns.at(-1)!.completedAt ?? turns.at(-1)!.assistant.at(-1)?.timestamp ?? turns.at(-1)!.user.timestamp,
     turns,
-    ...(currentBranch ? { resumeCursor: { resume: metadata.sessionId, ...(lastAssistantUuid ? { resumeSessionAt: lastAssistantUuid } : {}), turnCount: turns.length } } : {}),
+    ...(lastAssistantUuid ? { resumeCursor: { resume: metadata.sessionId, resumeSessionAt: lastAssistantUuid, turnCount: turns.length } } : {}),
     warnings,
   };
 }
