@@ -29,6 +29,7 @@
   },
   "files": [
     "dist",
+    "vendor",
     "README.md",
     "LICENSE"
   ],
@@ -37,12 +38,14 @@
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "prepack": "npm run build",
+    "prepack": "npm run build && npm run v2-vendor:check",
     "prepublishOnly": "npm run typecheck && npm test",
     "release:check": "npm publish --dry-run --access public",
     "compat:prepare": "node scripts/compatibility/prepare.mjs",
     "compat:schemas": "node scripts/compatibility/generate-schemas.mjs",
-    "test:compatibility": "npm run compat:prepare && tsx scripts/compatibility/run.ts"
+    "test:compatibility": "npm run compat:prepare && tsx scripts/compatibility/run.ts",
+    "v2-vendor:check": "node scripts/compatibility/v2-native/vendor-gate.mjs",
+    "test:v2-pack": "node scripts/compatibility/v2-native/pack-consumer-test.mjs artifacts/v2-native/fixture.mjs"
   },
   "engines": {
     "node": ">=22"

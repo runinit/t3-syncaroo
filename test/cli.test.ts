@@ -35,3 +35,11 @@ describe("replace CLI", () => {
     expect(result.stderr).toContain("Non-interactive replacement requires --yes");
   });
 });
+
+describe("global target options", () => {
+  it("describes --db as a T3 state database override", () => {
+    const result = cli("--help");
+    expect(result.status).toBe(0);
+    expect(result.stdout).toMatch(/--db <path>\s+T3 state database path/u);
+  });
+});

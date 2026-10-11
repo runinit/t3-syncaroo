@@ -43,6 +43,23 @@ describe("T3 IndexedDB cache reset", () => {
     expect(profiles[0]?.profilePath).toBe(join(appData, "T3 Code (Alpha)"));
   });
 
+  it("discovers the installed Linux v2 profile name", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-v2-cache-discovery-"));
+    const config = join(root, ".config");
+    const cache = join(config, "t3code-v2", "IndexedDB", "t3code_app_0.indexeddb.leveldb");
+    mkdirSync(cache, { recursive: true });
+    writeFileSync(join(cache, "CURRENT"), "MANIFEST-000001");
+
+    const profiles = discoverT3CacheProfiles({
+      environment: { XDG_CONFIG_HOME: config },
+      platform: "linux",
+      userHome: root,
+    });
+
+    expect(profiles).toHaveLength(1);
+    expect(profiles[0]?.profilePath).toBe(join(config, "t3code-v2"));
+  });
+
   it("backs up, verifies, and removes the rebuildable origin cache", async () => {
     const root = await mkdtemp(join(tmpdir(), "t3-import-cache-reset-"));
     const appData = join(root, "AppData");

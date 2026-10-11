@@ -36,22 +36,25 @@ function parseSince(value?: string): Date | undefined {
   return parsed;
 }
 function sourceName(value: string): SourceName { return sourceSchema.parse(value); }
+function reportWriteTarget(paths: ReturnType<typeof resolveTargetPaths>, dryRun: boolean): void {
+  if (!dryRun) console.error(`T3 target: ${paths.dbPath}`);
+}
 
-async function confirmImport(count: number): Promise<boolean> {
+async function confirmImport(count: number, target: string): Promise<boolean> {
   const prompt = createInterface({ input, output });
-  try { return /^(y|yes)$/iu.test((await prompt.question(`Import ${count} conversation${count === 1 ? "" : "s"} into T3? [y/N] `)).trim()); }
+  try { return /^(y|yes)$/iu.test((await prompt.question(`Target: ${target}\nImport ${count} conversation${count === 1 ? "" : "s"} into T3? [y/N] `)).trim()); }
   finally { prompt.close(); }
 }
 
-async function confirmSync(count: number): Promise<boolean> {
+async function confirmSync(count: number, target: string): Promise<boolean> {
   const prompt = createInterface({ input, output });
-  try { return /^(y|yes)$/iu.test((await prompt.question(`Synchronize ${count} conversation${count === 1 ? "" : "s"} with T3? [y/N] `)).trim()); }
+  try { return /^(y|yes)$/iu.test((await prompt.question(`Target: ${target}\nSynchronize ${count} conversation${count === 1 ? "" : "s"} with T3? [y/N] `)).trim()); }
   finally { prompt.close(); }
 }
 
-async function confirmReplace(count: number): Promise<boolean> {
+async function confirmReplace(count: number, target: string): Promise<boolean> {
   const prompt = createInterface({ input, output });
-  try { return /^(y|yes)$/iu.test((await prompt.question(`Replace ${count} canonical T3 task${count === 1 ? "" : "s"}? The old tasks will be soft-deleted. [y/N] `)).trim()); }
+  try { return /^(y|yes)$/iu.test((await prompt.question(`Target: ${target}\nReplace ${count} canonical T3 task${count === 1 ? "" : "s"}? The old tasks will be soft-deleted. [y/N] `)).trim()); }
   finally { prompt.close(); }
 }
 
@@ -81,7 +84,7 @@ program
   .description("Import, synchronize, and replace Codex and Claude Code conversations in T3 Code")
   .version(IMPORTER_VERSION)
   .option("--t3-home <path>", "T3 home directory")
-  .option("--db <path>", "T3 state.sqlite path")
+  .option("--db <path>", "T3 state database path")
   .option("--attachments-dir <path>", "T3 attachments directory")
   .option("--provider-instance <id>", "T3 provider instance")
   .option("--json", "write machine-readable JSON to stdout")
@@ -187,9 +190,10 @@ program.command("import")
       throw usageError("Non-interactive import requires --source, --workspace, and either --thread or --all.");
     }
     if (options.all && options.thread.length) throw usageError("--all and --thread are mutually exclusive.");
+    const paths = resolveTargetPaths(globalOverrides());
     if (!options.dryRun && !options.yes) {
       if (!process.stdout.isTTY || options.nonInteractive || isJson()) throw usageError("Non-interactive imports require --yes.");
-      if (!await confirmImport(options.all ? 1 : options.thread.length)) return;
+      if (!await confirmImport(options.all ? 1 : options.thread.length, paths.dbPath)) return;
     }
     const source = sourceName(options.source);
     const adapter = sourceAdapter(source);
@@ -201,7 +205,7 @@ program.command("import")
       return summary;
     });
     const loaded = await Promise.all(selected.map(async (summary) => ({ conversation: await adapter.load(summary, { workspace: options.workspace!, ...(since ? { since } : {}), ...(options.includeIncomplete !== undefined ? { includeIncomplete: options.includeIncomplete } : {}) }), resume: options.resume })));
-    const paths = resolveTargetPaths(globalOverrides());
+    reportWriteTarget(paths, Boolean(options.dryRun));
     const result: ImportRunResult = await importConversations(loaded, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun), resume: options.resume });
     await attachCacheReset(result, paths, result.results.some((item) => item.status === "imported"));
     print(result);
@@ -231,8 +235,9 @@ program.command("replace")
       }
       throw usageError("Non-interactive replacement requires --source, --workspace, and --thread.");
     }
+    const paths = resolveTargetPaths(globalOverrides());
     if (!options.yes && (!process.stdout.isTTY || options.nonInteractive || isJson())) throw usageError("Non-interactive replacement requires --yes.");
-    if (!options.dryRun && !options.yes && !await confirmReplace(options.thread.length)) return;
+    if (!options.dryRun && !options.yes && !await confirmReplace(options.thread.length, paths.dbPath)) return;
     const source = sourceName(options.source);
     const adapter = sourceAdapter(source);
     const summaries = await adapter.discover({ workspace: options.workspace });
@@ -242,7 +247,7 @@ program.command("replace")
       return summary;
     });
     const loaded = await Promise.all(selected.map(async (summary) => ({ conversation: await adapter.load(summary, { workspace: options.workspace! }) })));
-    const paths = resolveTargetPaths(globalOverrides());
+    reportWriteTarget(paths, Boolean(options.dryRun));
     const result = await replaceConversations(loaded, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun) });
     await attachCacheReset(result, paths, result.results.some((item) => item.status === "replaced"));
     print(result);
@@ -278,11 +283,12 @@ program.command("sync")
       throw usageError("Non-interactive sync requires --source, --workspace, and either --thread or --all.");
     }
     if (options.all && options.thread.length) throw usageError("--all and --thread are mutually exclusive.");
+    const paths = resolveTargetPaths(globalOverrides());
     if (!options.yes && (!process.stdout.isTTY || options.nonInteractive || isJson())) {
       throw usageError("Non-interactive synchronization requires --yes.");
     }
     if (!options.dryRun && !options.yes) {
-      if (!await confirmSync(options.all ? 1 : options.thread.length)) return;
+      if (!await confirmSync(options.all ? 1 : options.thread.length, paths.dbPath)) return;
     }
     const source = sourceName(options.source);
     const adapter = sourceAdapter(source);
@@ -293,11 +299,11 @@ program.command("sync")
       if (!summary) throw usageError(`Conversation not found in workspace: ${id}`);
       return summary;
     });
-    const paths = resolveTargetPaths(globalOverrides());
     const loaded = await Promise.all(selected.map(async (summary) => ({ conversation: await adapter.load(summary, { workspace: options.workspace! }) })));
     const eligible = options.all
       ? (await Promise.all(loaded.map(async (selection) => ({ selection, preview: await inspectConversationSync(selection.conversation, paths) })))).filter((item) => item.preview.previouslyImported).map((item) => item.selection)
       : loaded;
+    reportWriteTarget(paths, Boolean(options.dryRun));
     const result = await syncConversations(eligible, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun) });
     await attachCacheReset(result, paths, result.results.some((item) => item.status === "synced"));
     print(result);

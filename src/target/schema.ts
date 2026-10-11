@@ -65,10 +65,63 @@ export async function assertT3Closed(paths: TargetPaths): Promise<RuntimeState> 
 }
 
 export interface SchemaInfo {
+  profile: "legacy" | "nightly-v2";
   migration: number;
   integrity: string;
   eventCount: number;
   maxSequence: number;
+}
+
+export function assertV2Runtime(nodeVersion = process.versions.node): void {
+  const version = nodeVersion.match(/^v?(\d+)\.(\d+)\.(\d+)/u);
+  const major = Number(version?.[1]);
+  const minor = Number(version?.[2]);
+  const supported = major > 24 || (major === 24) || (major === 23 && minor >= 11) || (major === 22 && minor >= 16);
+  if (!supported) {
+    throw compatibilityError(`The pinned T3 v2 SQLite client requires Node.js 22.16+, 23.11+, or 24+ (detected ${nodeVersion}).`);
+  }
+}
+
+const V2_REQUIRED_COLUMNS: Record<string, string[]> = {
+  effect_sql_migrations: ["migration_id", "name", "created_at"],
+  orchestration_events: ["sequence", "event_id", "aggregate_kind", "stream_id", "stream_version", "event_type", "occurred_at", "command_id", "causation_event_id", "correlation_id", "actor_kind", "payload_json", "metadata_json", "application_event_version"],
+  orchestration_v2_projection_metadata: ["projection_name", "schema_version", "last_sequence", "updated_at"],
+  projection_projects: ["project_id", "workspace_root", "deleted_at"],
+  orchestration_v2_projection_threads: ["thread_id", "project_id", "title", "default_provider", "runtime_mode", "interaction_mode", "active_provider_thread_id", "created_at", "updated_at", "archived_at", "deleted_at", "payload_json", "provider_instance_id"],
+  orchestration_v2_projection_messages: ["message_id", "thread_id", "run_id", "node_id", "role", "streaming", "created_at", "updated_at", "payload_json"],
+  orchestration_v2_projection_turn_items: ["turn_item_id", "thread_id", "run_id", "node_id", "provider_thread_id", "provider_turn_id", "parent_item_id", "ordinal", "type", "status", "updated_at", "payload_json"],
+  orchestration_v2_turn_item_positions: ["thread_id", "turn_item_id", "ordinal"],
+  orchestration_v2_projection_provider_threads: ["provider_thread_id", "thread_id", "owner_node_id", "provider", "provider_session_id", "status", "first_run_ordinal", "last_run_ordinal", "updated_at", "payload_json", "driver", "provider_instance_id"],
+  orchestration_v2_projection_provider_sessions: ["provider_session_id", "thread_id", "provider", "status", "model", "updated_at", "payload_json", "driver", "provider_instance_id"],
+};
+
+function v2Migration(db: Database.Database): number {
+  const row = db.prepare("SELECT COALESCE(MAX(migration_id), 0) migration FROM effect_sql_migrations").get() as { migration: number };
+  return row.migration;
+}
+
+function validateNightlyV2(db: Database.Database, names: Set<string>): void {
+  const requiredNames = Object.keys(V2_REQUIRED_COLUMNS);
+  for (const table of requiredNames) {
+    if (!names.has(table)) throw compatibilityError(`Not a compatible T3 nightly v2 database: missing table '${table}'.`);
+    const available = new Set((db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).map((entry) => entry.name));
+    for (const column of V2_REQUIRED_COLUMNS[table]!) {
+      if (!available.has(column)) throw compatibilityError(`Unsupported T3 nightly v2 schema: ${table}.${column} is missing.`);
+    }
+  }
+  const migrationRows = db.prepare("SELECT migration_id, name FROM effect_sql_migrations WHERE migration_id IN (55, 61)").all() as Array<{ migration_id: number; name: string }>;
+  const migrations = new Map(migrationRows.map(({ migration_id, name }) => [migration_id, name]));
+  if (migrations.get(55) !== "OrchestrationV2" || migrations.get(61) !== "PullRequestReviewGuides") {
+    throw compatibilityError("Unsupported T3 schema profile: expected the pinned migration 55/61 signatures.");
+  }
+  const metadata = db.prepare("SELECT schema_version, last_sequence FROM orchestration_v2_projection_metadata WHERE projection_name = 'thread-projections'").get() as { schema_version: number; last_sequence: number } | undefined;
+  if (!metadata || ![1, 2].includes(metadata.schema_version)) {
+    throw compatibilityError("Unsupported T3 nightly v2 schema: missing or unsupported thread-projections metadata.");
+  }
+  const maxSequence = (db.prepare("SELECT COALESCE(MAX(sequence), 0) maxSequence FROM orchestration_events").get() as { maxSequence: number }).maxSequence;
+  if (metadata.last_sequence < maxSequence) {
+    throw safetyError(`T3 v2 thread projections are behind the event store (projection ${metadata.last_sequence}, events ${maxSequence}). Open T3 and let it finish loading before importing.`);
+  }
 }
 
 export function validateTargetDatabase(db: Database.Database): SchemaInfo {
@@ -82,7 +135,14 @@ export function validateTargetDatabase(db: Database.Database): SchemaInfo {
     for (const column of columns) if (!available.has(column)) throw compatibilityError(`Unsupported T3 schema: ${table}.${column} is missing.`);
   }
   if (!names.has("effect_sql_migrations")) throw compatibilityError("Not a compatible T3 database: missing migrations table.");
-  const migration = targetMigration(db);
+  const migration = v2Migration(db);
+  if (migration === 61) {
+    assertV2Runtime();
+    validateNightlyV2(db, names);
+    const events = db.prepare("SELECT COUNT(*) count, COALESCE(MAX(sequence), 0) maxSequence FROM orchestration_events").get() as { count: number; maxSequence: number };
+    return { profile: "nightly-v2", migration, integrity, eventCount: events.count, maxSequence: events.maxSequence };
+  }
+  const legacyMigration = targetMigration(db);
   const events = db.prepare("SELECT COUNT(*) count, COALESCE(MAX(sequence), 0) maxSequence FROM orchestration_events").get() as { count: number; maxSequence: number };
-  return { migration, integrity, eventCount: events.count, maxSequence: events.maxSequence };
+  return { profile: "legacy", migration: legacyMigration, integrity, eventCount: events.count, maxSequence: events.maxSequence };
 }

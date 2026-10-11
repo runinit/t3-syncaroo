@@ -1,16 +1,16 @@
 # t3-import
 
-`t3-import` is an independent, local-only CLI for importing Codex and Claude Code conversation history into [T3 Code](https://github.com/pingdotgg/t3code). It writes canonical orchestration events while T3 is closed; T3 rebuilds its own projections on the next launch. The original provider session is bound so the current branch can resume when the source history is still available.
+`t3-import` is an independent, local-only CLI for importing Codex and Claude Code conversation history into [T3 Code](https://github.com/pingdotgg/t3code). It writes while T3 is closed and binds imported tasks to their original provider sessions when supported.
 
-Compatibility is intentionally explicit: **T3 migrations 40–53**, Node.js 22 or newer, and local files only. Unknown T3 schemas fail closed.
+The established feature set supports T3 migrations 40–53 on Node.js 22 or newer. The pinned T3 Code nightly `0.0.46-nightly.20261011.2980` (migration 61) has an initial limited path: settled Codex conversations containing text only. Rich Codex history and Claude on v2 remain unsupported in this first slice. The pinned native helper requires Node.js 22.16+, 23.11+, or 24+ for v2 operations; legacy profiles retain the package's Node.js 22+ minimum. Unknown T3 schemas fail closed.
 
 ## How it works
 
 `t3-import` reads local Codex conversations through `codex app-server` and Codex rollout JSONL files. It reads Claude Code sessions from the JSONL files under `~/.claude/projects/`. The source data is normalized into conversations, turns, messages, tool activity, plans, usage, and supported image attachments.
 
-To keep T3 startup bounded, imports preserve every message, turn boundary, plan, image, error or approval, context compaction, and resume binding while compacting repetitive activity telemetry. Context-window snapshots are omitted, and long turns retain the latest visible reasoning summary plus a representative significant tool activity. The importer rejects any write that would exceed T3's safe one-launch projection budget.
+On supported legacy profiles, imports preserve every message, turn boundary, plan, image, error or approval, context compaction, and resume binding while compacting repetitive activity telemetry. Context-window snapshots are omitted, and long turns retain the latest visible reasoning summary plus a representative significant tool activity. The importer rejects any write that would exceed its safe one-launch event budget. The initial v2 path rejects attachments, activities, plans, in-progress turns, and non-current Codex branches rather than dropping them.
 
-With T3 Code closed, the importer validates the local database against the supported migration profiles and creates a verified backup. It then appends canonical events to `orchestration_events` and adds provider-session bindings for conversations that can be resumed. It does not modify T3's projection tables: T3 Code rebuilds them from the imported events the next time it starts. After a successful write, the importer also backs up and resets T3's rebuildable IndexedDB origin cache so stale task snapshots cannot hide newly imported history.
+With T3 Code closed, the importer validates the local database against the supported migration profiles and creates a verified backup. For migrations 40–53 it appends canonical events to `orchestration_events`; T3 rebuilds its projections on the next launch. For the pinned v2 profile, a bundled helper uses T3's native EventSink to write and project events before closing and reopening the database. After a successful write, the importer also backs up and resets T3's rebuildable IndexedDB origin cache so stale task snapshots cannot hide newly imported history.
 
 After an initial import, `t3-import` can append newly settled Codex turns and newly settled turns from linear Claude conversations. Completed, interrupted, and failed turns are preserved; only genuinely active or indeterminate turns are ignored during synchronization. It verifies that the imported checkpoint is still an exact prefix, adopts exact turns already created by resuming through T3, and never replaces edited or deleted history. Claude sessions with multiple non-sidechain leaves after deterministic compaction and retry normalization are reported as conflicts rather than guessed.
 
@@ -128,7 +128,7 @@ npm run build
 npm pack
 ```
 
-Compatibility is validated against pinned historical T3 commits for every migration from 40 through 53, including stable `v0.0.42` (`719a76ca1`) and nightly `v0.0.43-nightly.20260920.2031` (`adcd90858`). Earlier versions and unvalidated future migrations fail closed. The importer never upgrades a T3 database; T3 owns migrations, and existing imports can continue synchronizing after an upgrade within the supported range.
+Compatibility is validated against pinned historical T3 commits for every migration from 40 through 53, including stable `v0.0.42` (`719a76ca1`) and nightly `v0.0.43-nightly.20260920.2031` (`adcd90858`). The initial v2 path is pinned to `0.0.46-nightly.20261011.2980` (migration 61, source commit `ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e`). Earlier versions and unvalidated future migrations fail closed. The importer never upgrades a T3 database; T3 owns migrations.
 
 `npm test` uses committed schemas generated from T3's actual migrations. The additional integration matrix runs the historical event decoders, projectors, and provider restoration services against synthetic databases:
 
@@ -137,5 +137,17 @@ npm run test:compatibility
 ```
 
 This requires Git, tar, Node.js 22.21.1 or newer, network access for isolated development dependencies, and a T3 checkout containing the pinned commits at `repos/t3code` (override with `T3_REFERENCE_REPO`). It prepares source snapshots under `artifacts/compatibility`, exercises both providers at all fourteen migrations and every upgrade to 53, and writes a JSON result report. Provider processes are replaced with controlled test adapters; no paid provider work runs. The installed T3 application and live database are not used.
+
+The v2 helper and packed CLI acceptance can be reproduced with the pinned source build. This needs Git, tar, Node.js 22.16+ (or 23.11+/24+), and network access for the source archive and clean consumer package install:
+
+```text
+node scripts/compatibility/v2-proof/prepare.mjs
+node scripts/compatibility/v2-native/build.mjs
+node scripts/compatibility/v2-native/license-gate.test.mjs
+node scripts/compatibility/v2-native/source-lock-gate.test.mjs
+npm run test:v2-pack
+```
+
+The packed-consumer check installs the actual npm tarball into a temporary consumer, imports a synthetic text-only Codex session into a migration61 database, reopens it through the bundled native helper, retries without duplicating events, and rejects changed history. The fixture is synthetic; it does not use installed T3 data or call a provider. The helper's bundled dependency notices and pinned source hashes are checked during `npm pack`.
 
 See [compatibility validation](https://github.com/CarlosGtrz/t3-import/blob/main/docs/compatibility.md) for reference commits, fixture regeneration, and the exact validation boundary.

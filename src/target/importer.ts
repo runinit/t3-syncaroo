@@ -1,4 +1,5 @@
 import Database from "better-sqlite3";
+import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import {
   closeSync,
@@ -13,6 +14,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, extname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import type {
   CanonicalActivity,
@@ -343,6 +345,13 @@ function existingProjectId(db: Database.Database, workspace: string): string | u
   })?.streamId;
 }
 
+function assertNoTombstonedProject(db: Database.Database, workspace: string): void {
+  const normalized = canonicalPath(workspace);
+  const rows = db.prepare("SELECT project_id projectId, workspace_root workspaceRoot FROM projection_projects WHERE deleted_at IS NOT NULL").all() as Array<{ projectId: string; workspaceRoot: string }>;
+  const deleted = rows.find((row) => canonicalPath(row.workspaceRoot) === normalized);
+  if (deleted) throw safetyError(`T3 has a deleted project for ${workspace} (${deleted.projectId}). Restore or rename that project before importing.`);
+}
+
 function isImported(db: Database.Database, sourceKey: string, thread: CanonicalThread, threadId: string): boolean {
   const marker = deterministicUuid(`t3-import:event:${sourceKey}:thread.created`);
   const found = db.prepare("SELECT 1 found FROM orchestration_events WHERE event_id = ? OR (stream_id = ? AND event_type = 'thread.created') LIMIT 1").get(marker, threadId);
@@ -422,6 +431,326 @@ function aggregateStatus(results: ImportItemResult[], dryRun: boolean): ImportRu
   return statuses.has("already-imported") ? "already-imported" : "imported";
 }
 
+interface V2ThreadReply {
+  threadId: string;
+  exists: boolean;
+  thread?: { id?: string; projectId?: string; historyOrigin?: string } | null;
+  records?: {
+    thread?: { id?: string; projectId?: string; historyOrigin?: string };
+    messages?: Array<{ role: string; text: string }>;
+    providerThreads?: Array<{ appThreadId?: string; driver?: string; nativeThreadRef?: { driver?: string; nativeId?: string; strength?: string } }>;
+  };
+}
+
+interface V2NativeReply {
+  ok: boolean;
+  error?: string;
+  integrity?: string;
+  migrations?: Array<{ migrationId: number; name: string }>;
+  profile?: { isV2Schema?: boolean; requiredTablesPresent?: boolean; schemaRevision?: number };
+  projectionMetadata?: { schemaVersion: number; lastSequence: number } | null;
+  threads?: V2ThreadReply[];
+  projects?: Array<{ id?: string; projectId?: string; workspaceRoot?: string; deletedAt?: string | null; [key: string]: unknown }>;
+  outcome?: "written" | "already-present" | "write-failed";
+  sequences?: number[];
+  firstSequence?: number;
+  lastSequence?: number;
+  storedSequenceRange?: { first: number; last: number } | null;
+  projections?: Array<V2ThreadReply & { snapshot?: V2ThreadReply }>;
+  projectCommitted?: boolean;
+  projectCompensated?: boolean;
+}
+
+interface V2Plan {
+  thread: CanonicalThread;
+  threadId: string;
+  projectId: string;
+  provider: ReturnType<typeof resolveProviderSelection>;
+  events: Array<Record<string, unknown>>;
+  projectEvent?: Record<string, unknown>;
+  messages: Array<{ role: string; text: string }>;
+  resumable: boolean;
+  fingerprint: string;
+}
+
+function v2HelperPath(): string {
+  const candidates = [
+    fileURLToPath(new URL("../../vendor/t3-v2-native-helper.mjs", import.meta.url)),
+    fileURLToPath(new URL("../../artifacts/v2-native/helper.mjs", import.meta.url)),
+  ];
+  const helper = candidates.find((path) => existsSync(path));
+  if (!helper) throw writeError("The packaged T3 v2 native helper is missing. Reinstall t3-import or rebuild its pinned helper.");
+  return helper;
+}
+
+function callV2Native(paths: TargetPaths, request: Record<string, unknown>): Promise<V2NativeReply> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [v2HelperPath()], { stdio: ["pipe", "pipe", "pipe"] });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => { stdout += chunk; });
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => { stderr += chunk; });
+    child.once("error", (error) => reject(writeError(`Could not start the T3 v2 native helper: ${error.message}`, error)));
+    child.once("close", (code) => {
+      if (code !== 0) {
+        reject(writeError(`The T3 v2 native helper failed${stderr.trim() ? `: ${stderr.trim()}` : ` (exit ${code})`}.`));
+        return;
+      }
+      let response: V2NativeReply;
+      try { response = JSON.parse(stdout.trim()) as V2NativeReply; }
+      catch (error) {
+        reject(writeError(`The T3 v2 native helper returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`, error));
+        return;
+      }
+      if (response.ok !== true) {
+        const recovery = response.projectCommitted && !response.projectCompensated
+          ? " A project was created but could not be removed; restore the verified backup before retrying."
+          : "";
+        reject(writeError(`${response.error ?? "The native helper rejected the request."}${recovery}`));
+        return;
+      }
+      resolve(response);
+    });
+    child.stdin.end(JSON.stringify({ ...request, dbPath: paths.dbPath }));
+  });
+}
+
+function planV2TextThread(selection: ImportSelection, thread: CanonicalThread, paths: TargetPaths, projectId: string, createProject: boolean): V2Plan {
+  if (thread.source !== "codex") throw safetyError("This T3 v2 import slice accepts settled Codex text conversations only.");
+  if (!thread.currentBranch) throw safetyError(`Codex session ${thread.sourceSessionId} has a non-current branch; branch history is not supported by this T3 v2 import slice.`);
+  if (!thread.turns.length || thread.turns.some((turn) => turn.status === "inProgress")) {
+    throw safetyError(`Codex session ${thread.sourceSessionId} is not settled. Select a completed, interrupted, or failed conversation.`);
+  }
+  const unsupported = thread.turns.find((turn) => turn.activities.length || turn.plans.length || turn.user.attachments.length || turn.assistant.some((message) => message.attachments.length));
+  if (unsupported) throw safetyError(`Codex session ${thread.sourceSessionId} contains activity, plan, or attachment data that this T3 v2 import slice cannot preserve yet.`);
+
+  const threadId = /^[0-9a-f-]{36}$/iu.test(thread.sourceSessionId)
+    ? thread.sourceSessionId
+    : deterministicUuid(`t3-import:thread:${thread.sourceKey}`);
+  const provider = resolveProviderSelection(paths, "codex", thread.model, thread.effort);
+  const providerThreadId = deterministicUuid(`t3-import:v2:provider-thread:${thread.sourceKey}`);
+  const createdAt = thread.createdAt;
+  const updatedAt = thread.updatedAt;
+  const title = thread.title.trim() || "Untitled thread";
+  const appThread = {
+    createdBy: "system", creationSource: "server", id: threadId, projectId, title,
+    providerInstanceId: provider.instanceId, modelSelection: modelSelection(provider),
+    runtimeMode: "full-access", interactionMode: "default", branch: null, worktreePath: null,
+    linkedPullRequest: null, branchPullRequest: null, activeProviderThreadId: providerThreadId,
+    historyOrigin: "v1_import", lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
+    forkedFrom: null, createdAt, updatedAt, archivedAt: null, settledOverride: "settled",
+    settledAt: updatedAt, unsettledAt: null, snoozedUntil: null, snoozedAt: null, pinnedAt: null,
+    pinOrderKey: null, activeOrderKey: null, lastVisitedAt: null, deletedAt: null,
+  };
+  const nativeProviderThread = {
+    id: providerThreadId, driver: "codex", providerInstanceId: provider.instanceId, providerSessionId: null,
+    appThreadId: threadId, ownerNodeId: null,
+    nativeThreadRef: { driver: "codex", nativeId: thread.sourceSessionId, strength: "strong" },
+    nativeConversationHeadRef: null, status: "idle", firstRunOrdinal: null, lastRunOrdinal: null,
+    handoffIds: [], forkedFrom: null, pendingBackgroundTasks: [], createdAt, updatedAt,
+  };
+  const events: Array<Record<string, unknown>> = [{
+    id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:thread-created`), type: "thread.created",
+    threadId, providerInstanceId: provider.instanceId, occurredAt: createdAt, payload: appThread,
+  }];
+  const messages: Array<{ role: string; text: string }> = [];
+  let ordinal = 0;
+  for (const turn of thread.turns) {
+    const entries = [turn.user, ...turn.assistant];
+    for (const message of entries) {
+      ordinal += 1;
+      const messageId = deterministicUuid(`t3-import:v2:message:${thread.sourceKey}:${message.sourceId}`);
+      const itemId = deterministicUuid(`t3-import:v2:turn-item:${thread.sourceKey}:${message.sourceId}`);
+      const at = message.timestamp;
+      const user = message.role === "user";
+      const conversationMessage = {
+        createdBy: user ? "user" : "agent", creationSource: "server", id: messageId,
+        threadId, runId: null, nodeId: null, role: message.role, text: message.text,
+        attachments: [], streaming: false, createdAt: at, updatedAt: at,
+      };
+      const common = {
+        id: itemId, threadId, runId: null, nodeId: null, providerThreadId: null, providerTurnId: null,
+        nativeItemRef: null, parentItemId: null, ordinal, status: "completed", title: null,
+        startedAt: at, completedAt: at, updatedAt: at,
+      };
+      const item = user
+        ? { ...common, createdBy: "user", creationSource: "server", type: "user_message", messageId,
+            inputIntent: "turn_start", text: message.text, attachments: [] }
+        : { ...common, type: "assistant_message", messageId, text: message.text, streaming: false };
+      events.push(
+        { id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:message:${message.sourceId}`), type: "message.updated", threadId, occurredAt: at, payload: conversationMessage },
+        { id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:item:${message.sourceId}`), type: "turn-item.updated", threadId, occurredAt: at, payload: item },
+      );
+      messages.push({ role: message.role, text: message.text });
+    }
+  }
+  events.push({
+    id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:provider-thread`), type: "provider-thread.updated",
+    threadId, driver: "codex", providerInstanceId: provider.instanceId, occurredAt: updatedAt,
+    payload: nativeProviderThread,
+  });
+  const projectEvent = createProject ? {
+    commandId: deterministicUuid(`t3-import:v2:project-command:${canonicalPath(thread.workspace)}`),
+    commandType: "project.create", acceptedAt: createdAt,
+    event: {
+      eventId: deterministicUuid(`t3-import:v2:project-event:${canonicalPath(thread.workspace)}`),
+      aggregateKind: "project", aggregateId: projectId, occurredAt: createdAt,
+      commandId: deterministicUuid(`t3-import:v2:project-command:${canonicalPath(thread.workspace)}`),
+      causationEventId: null, correlationId: null, metadata: {}, type: "project.created",
+      payload: { projectId, title: basename(thread.workspace), workspaceRoot: thread.workspace,
+        defaultModelSelection: modelSelection(provider), scripts: [], createdAt, updatedAt },
+    },
+  } : undefined;
+  return { thread, threadId, projectId, provider, events, ...(projectEvent ? { projectEvent } : {}), messages, resumable: selection.resume && Boolean(thread.resumeCursor), fingerprint: selection.conversation.fingerprint };
+}
+
+function v2HistoryMatches(value: V2ThreadReply | undefined, plan: V2Plan): boolean {
+  const nativeThread = value?.records?.thread ?? value?.thread;
+  const messages = value?.records?.messages ?? [];
+  const sessions = value?.records?.providerThreads ?? [];
+  return value?.exists === true
+    && nativeThread?.id === plan.threadId
+    && nativeThread.projectId === plan.projectId
+    && nativeThread.historyOrigin === "v1_import"
+    && messages.length === plan.messages.length
+    && messages.every((message, index) => message.role === plan.messages[index]?.role && message.text === plan.messages[index]?.text)
+    && sessions.some((session) => session.appThreadId === plan.threadId
+      && session.driver === "codex"
+      && session.nativeThreadRef?.driver === "codex"
+      && session.nativeThreadRef.strength === "strong"
+      && session.nativeThreadRef.nativeId === plan.thread.sourceSessionId);
+}
+
+async function importNightlyV2(
+  selections: ImportSelection[],
+  paths: TargetPaths,
+  options: ImportOptions,
+): Promise<ImportRunResult> {
+  const db = new Database(paths.dbPath, { readonly: true, fileMustExist: true });
+  let plans: V2Plan[] = [];
+  try {
+    const projectIds = new Map<string, string>();
+    for (const selection of selections) {
+      for (const thread of selection.conversation.threads) {
+        const workspaceKey = canonicalPath(thread.workspace);
+        assertNoTombstonedProject(db, thread.workspace);
+        const knownProject = projectIds.get(workspaceKey);
+        const projectedProject = knownProject ?? existingProjectId(db, thread.workspace);
+        const projectId = projectedProject ?? deterministicUuid(`t3-import:project:${workspaceKey}`);
+        projectIds.set(workspaceKey, projectId);
+        plans.push(planV2TextThread(selection, thread, paths, projectId, !projectedProject));
+      }
+    }
+  } finally {
+    db.close();
+  }
+  const plannedEventCount = plans.reduce((count, plan) => count + plan.events.length, 0);
+  if (plannedEventCount > MAX_SAFE_IMPORT_EVENTS) {
+    throw safetyError(`The Codex text import would append ${plannedEventCount} events, exceeding the safe one-launch limit of ${MAX_SAFE_IMPORT_EVENTS}. Split the import into smaller batches before retrying.`);
+  }
+
+  const inspection = await callV2Native(paths, {
+    op: "inspect",
+    threadIds: plans.map((plan) => plan.threadId),
+    projectIds: [...new Set(plans.map((plan) => plan.projectId))],
+  });
+  if (inspection.integrity !== "ok" || inspection.profile?.isV2Schema !== true || inspection.profile.requiredTablesPresent !== true) {
+    throw safetyError("The pinned native reader could not confirm this as an intact T3 v2 database. No changes were made.");
+  }
+  const projectsById = new Map((inspection.projects ?? []).map((project) => [project.projectId ?? project.id, project]));
+  for (const plan of plans) {
+    const nativeProject = projectsById.get(plan.projectId);
+    if (nativeProject?.deletedAt) {
+      throw safetyError(`T3 project ${plan.projectId} for ${plan.thread.workspace} is deleted. Restore it before importing.`);
+    }
+    if (nativeProject && canonicalPath(String(nativeProject.workspaceRoot ?? "")) !== canonicalPath(plan.thread.workspace)) {
+      throw safetyError(`T3 project ${plan.projectId} does not match the source workspace for ${plan.thread.sourceSessionId}.`);
+    }
+  }
+  const inspectedById = new Map((inspection.threads ?? []).map((thread) => [thread.threadId, thread]));
+  const existing = new Set<string>();
+  for (const plan of plans) {
+    const prior = inspectedById.get(plan.threadId);
+    if (prior?.exists) {
+      if (!v2HistoryMatches(prior, plan)) {
+        throw safetyError(`T3 already has a different task for Codex session ${plan.thread.sourceSessionId}. Keep the existing task and resolve the history conflict before importing.`);
+      }
+      existing.add(plan.threadId);
+    }
+  }
+
+  const results: ImportItemResult[] = plans.map((plan) => ({
+    source: plan.thread.source,
+    sourceId: plan.thread.sourceSessionId,
+    sourceKey: plan.thread.sourceKey,
+    status: existing.has(plan.threadId) ? "already-imported" : options.dryRun ? "dry-run" : "imported",
+    threadId: plan.threadId,
+    projectId: plan.projectId,
+    title: plan.thread.title,
+    turns: plan.thread.turns.length,
+    messages: plan.messages.length,
+    activities: 0,
+    events: plan.events.length,
+    attachments: 0,
+    resumable: plan.resumable,
+    warnings: [...plan.thread.warnings, ...(plan.provider.warning ? [plan.provider.warning] : [])],
+  }));
+  const pending = plans.filter((plan) => !existing.has(plan.threadId));
+  if (options.dryRun || pending.length === 0) {
+    return { schemaVersion: 1, status: aggregateStatus(results, options.dryRun), target: paths.dbPath, migration: 61, backup: null, results, warnings: [] };
+  }
+
+  const backupDb = new Database(paths.dbPath, { fileMustExist: true });
+  let backup: string;
+  try { backup = createBackup(backupDb, paths); }
+  finally { backupDb.close(); }
+
+  const warnings: string[] = [];
+  for (const plan of pending) {
+    let write: V2NativeReply;
+    try {
+      write = await callV2Native(paths, { op: "write", ...(plan.projectEvent ? { projectEvent: plan.projectEvent } : {}), events: plan.events });
+    } catch (error) {
+      throw writeError(`${error instanceof Error ? error.message : String(error)} The verified backup is ${backup}.`, error);
+    }
+    const result = results.find((item) => item.threadId === plan.threadId)!;
+    if (write.outcome === "already-present") {
+      const priorResponse = await callV2Native(paths, { op: "inspect", threadIds: [plan.threadId] });
+      const prior = (priorResponse.threads ?? []).find((thread) => thread.threadId === plan.threadId);
+      if (!v2HistoryMatches(prior, plan)) {
+        throw safetyError(`T3 already has a different task for Codex session ${plan.thread.sourceSessionId}. The verified backup is ${backup}.`);
+      }
+      result.status = "already-imported";
+      continue;
+    }
+    const sequenceRange = write.storedSequenceRange ?? (write.firstSequence && write.lastSequence ? { first: write.firstSequence, last: write.lastSequence } : undefined);
+    const projection = write.projections?.find((thread) => thread.threadId === plan.threadId);
+    const readback: V2ThreadReply | undefined = projection ? {
+      threadId: projection.threadId,
+      exists: true,
+      ...(projection.records ? { records: projection.records } : {}),
+    } : undefined;
+    if (!sequenceRange || !readback || !v2HistoryMatches(readback, plan)) {
+      throw writeError(`T3 v2 did not return committed event sequences for ${plan.thread.sourceSessionId}. The verified backup is ${backup}.`);
+    }
+    result.sequence = { first: sequenceRange.first, last: sequenceRange.last };
+    const record: LedgerRecord = {
+      targetId: sha256(canonicalPath(paths.dbPath)), source: "codex",
+      sourceSessionId: plan.thread.sourceSessionId, sourceKey: plan.thread.sourceKey,
+      sourceFingerprint: plan.fingerprint, projectId: plan.projectId, threadId: plan.threadId,
+      importedAt: new Date().toISOString(), importerVersion: IMPORTER_VERSION,
+      migration: 61, firstSequence: sequenceRange.first, lastSequence: sequenceRange.last,
+      resumable: plan.resumable, backupPath: backup, warnings: result.warnings,
+      identitySeed: plan.thread.sourceKey, currentSourceKey: plan.thread.sourceKey,
+      ...(plan.thread.leafId ? { sourceLeafId: plan.thread.leafId } : {}),
+      sourceTitle: plan.thread.title, checkpoint: checkpointForThread(plan.thread), isCanonical: true,
+    };
+    try { recordImports([record]); }
+    catch (error) { warnings.push(`Import succeeded, but the external ledger could not be updated: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+  return { schemaVersion: 1, status: aggregateStatus(results, false), target: paths.dbPath, migration: 61, backup, results, warnings };
+}
+
 export async function importConversations(
   selections: ImportSelection[],
   paths: TargetPaths,
@@ -433,8 +762,14 @@ export async function importConversations(
   const db = new Database(paths.dbPath, { readonly: options.dryRun, fileMustExist: true });
   let backup: string | null = null;
   const runWarnings: string[] = [];
+  let dbOpen = true;
   try {
     const schema = validateTargetDatabase(db);
+    if (schema.profile === "nightly-v2") {
+      db.close();
+      dbOpen = false;
+      return await importNightlyV2(selections, paths, options);
+    }
     const planned: PlannedThread[] = [];
     const projectIds = new Map<string, string>();
     const plannedProjectEvents = new Set<string>();
@@ -579,7 +914,7 @@ export async function importConversations(
     if (error instanceof Error && error.name === "ImporterError") throw error;
     throw writeError(`Import failed: ${error instanceof Error ? error.message : String(error)}`, error);
   } finally {
-    db.close();
+    if (dbOpen) db.close();
     releaseLock();
   }
 }
