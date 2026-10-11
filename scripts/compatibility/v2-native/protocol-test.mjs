@@ -88,6 +88,14 @@ assert.equal(afterAppend.threads[0].events.at(-1).id, appendEvents[1].id);
 const duplicateAppend = run(nodePath, [helperPath], JSON.stringify(appendRequest(appendEvents, { expectedConversationHeadRef: nextHeadRef })));
 assert.equal(duplicateAppend.ok, false); assert.equal(duplicateAppend.outcome, 'append-conflict');
 assert.equal(duplicateAppend.reason, 'event-id-exists');
+const duplicateWithinBatch = run(nodePath, [helperPath], JSON.stringify(appendRequest(
+  [appendEvents[0], appendEvents[0]], { expectedConversationHeadRef: nextHeadRef },
+)));
+assert.equal(duplicateWithinBatch.ok, false); assert.equal(duplicateWithinBatch.outcome, 'append-conflict');
+assert.equal(duplicateWithinBatch.reason, 'duplicate-event-id');
+const afterDuplicateBatch = run(nodePath, [helperPath], JSON.stringify(request(dbPath, 'inspect', { threadIds: [threadId] })));
+assert.deepEqual(afterDuplicateBatch.threads[0].events.map((event) => event.id), afterAppend.threads[0].events.map((event) => event.id));
+assert.equal(afterDuplicateBatch.threads[0].records.providerThreads[0].nativeConversationHeadRef.nativeId, nextHeadRef.nativeId);
 async function appendRejectedWithoutEvents(name, overrides, invalidEvents = appendEvents) {
   const beforeIds = afterAppend.threads[0].events.map((event) => event.id);
   const rejected = run(nodePath, [helperPath], JSON.stringify(appendRequest(invalidEvents, overrides)));
@@ -229,6 +237,7 @@ const invalidProjectCommand = { ...projectEvent, commandType: 'project.delete',
 };
 await rejectsBeforeWrite('invalid-project-command', events, invalidProjectCommand, [projectId]);
 const nodeVersion = spawnSync(nodePath, ['--version'], { encoding: 'utf8' }).stdout.trim();
-console.log(JSON.stringify({result:'PASS',node:nodeVersion,inspect:true,write:true,append:true,appendIdentityConflicts:true,appendRollback:true,existingThreadConflict:true,
+console.log(JSON.stringify({result:'PASS',node:nodeVersion,inspect:true,write:true,append:true,appendIdentityConflicts:true,
+  duplicateAppendEventIds:true,appendRollback:true,existingThreadConflict:true,
   threadEnvelopeValidation:true,projectIdentityValidation:true,projectCreateRestriction:true,noResumeAppend:true,
   tombstonedProjectNotResurrected:true,closeReopen:true,rollback:true,projectCompensation:true}));
