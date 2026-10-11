@@ -51,6 +51,30 @@ helper attempts deterministic `project.deleted` compensation through
 `projectCompensated`; failed compensation remains a partial commit for caller
 recovery.
 
+The helper also accepts an `append` request for an existing imported thread.
+It requires the expected thread/project/provider IDs, active provider-thread
+ID, nullable-or-strong native source reference, and exact expected nullable-or-
+strong conversation-head reference. It reads the current shell and provider
+binding through T3's projection store, rejects missing, deleted, ambiguous, or
+mismatched bindings, and rejects any event IDs already in the native event
+store. Append batches are limited to `message.updated`, `turn-item.updated`,
+`plan.updated`, and at most one matching `provider-thread.updated`; create,
+delete, and project events are forbidden. A null `nativeThreadRef` is allowed
+only when the current active binding also has no native reference, preserving
+history-only imports that opted out of resume. A supplied provider-thread
+update must keep that reference and may advance its conversation head only to
+a strong reference or null; a null source reference cannot gain a conversation
+head during append.
+
+Head and binding checks are read-only preflight before the sink call; they are
+not an atomic compare-and-swap with `EventSinkV2.write`. The application must
+keep T3 closed and hold the importer lock while appending. Once preflight passes,
+the helper writes the whole append batch through the native sink, opens a new
+read-only layer, and returns its stored sequence range and projections. A
+preflight mismatch or event-ID collision returns a structured conflict without
+writing. Sink failures are returned as `write-failed`; the native sink rolls
+back the event batch.
+
 An existing thread ID returns `existing-thread-conflict` with the current
 native shell. The helper does not treat an ID match as proof of source/history
 identity or authorize skipping the import; the caller must validate those
@@ -62,13 +86,16 @@ deleted rows so a tombstoned project ID is not reused.
 
 The stdin protocol acceptance test runs against the unpacked candidate. It
 writes and reads back a representative thread, message, turn item, and native
-provider-thread binding; verifies existing-thread conflict and identity
-rejections, plus close/reopen; then installs a test-only SQLite trigger that aborts a projection
-write to prove the thread event batch rolls back and project compensation marks
-the project deleted. The trigger is fault injection only; persistence and
+provider-thread binding; verifies exact event ID/sequence ownership and
+existing-thread conflict, then appends a message and matching provider-thread
+head update. It tests project/provider/source/head conflicts, forbidden delete
+events, event-ID collisions, no-resume append with null source references, and
+append rollback under a test-only SQLite projection trigger. It also tests
+project compensation for failed initial writes and verifies deleted-project
+non-resurrection. The trigger is fault injection only; persistence and
 projections use the pinned T3 implementation.
 
-Most recent candidate: 2,993,567 bytes unpacked and 576,094-byte npm tarball,
+Most recent candidate: 3,000,715 bytes unpacked and 577,276-byte npm tarball,
 115 pinned T3 source files, and 94 bundled dependencies. All 94 have nonempty
 license texts (92 MIT, 1 ISC, 1 BSD-2-Clause); the helper's external runtime
 imports are Node built-ins only. The migration runner is separate from the
