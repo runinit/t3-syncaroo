@@ -6,7 +6,7 @@
 
 **References:** [Support spec](../../../docs/t3-v2-support-spec.md) · [Research](../../../docs/t3-v2-support-research.md) · [Design](../../../docs/t3-v2-native-design.md) · [Completed writer proof](../../../docs/t3-v2-proof.md) (evidence, not a ticket).
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Completed, interrupted, and failed Codex turns retain their meaning and order in T3.
 - [ ] Supported plans, tool activity, usage, compaction, errors, and resolved approvals/input are represented in T3 history.
