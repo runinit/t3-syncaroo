@@ -80290,12 +80290,13 @@ async function inspect2(request) {
     for (const rawId of request.threadIds ?? []) {
       const threadId2 = ThreadId.make(rawId);
       const shell = yield* projections.getThreadShell(threadId2);
-      const records = shell ? yield* projections.getThreadRecords(threadId2, ["messages", "turnItems", "providerThreads"]) : void 0;
-      const events2 = shell ? yield* eventStore.read({ threadId: threadId2 }).pipe(runCollect) : [];
+      const records = shell ? yield* projections.getThreadRecords(threadId2, ["messages", "turnItems", "plans", "providerThreads", "providerTurns"]) : void 0;
+      const events2 = yield* eventStore.read({ threadId: threadId2 }).pipe(runCollect);
       threads.push({
         threadId: threadId2,
         exists: shell !== null,
-        ...shell ? { thread: shell, records, events: events2.map((stored) => ({ id: stored.event.id, sequence: stored.sequence })) } : {}
+        ...shell ? { thread: shell, records } : {},
+        events: events2.map((stored) => ({ id: stored.event.id, sequence: stored.sequence }))
       });
     }
     return {
@@ -80430,7 +80431,7 @@ async function writeRequest(request) {
   const readback = await run3(gen2(function* () {
     const projections = yield* ProjectionStoreV2;
     const snapshot2 = yield* projections.getThreadSnapshot(threadId2);
-    const records = yield* projections.getThreadRecords(threadId2, ["messages", "turnItems", "providerThreads"]);
+    const records = yield* projections.getThreadRecords(threadId2, ["messages", "turnItems", "plans", "providerThreads", "providerTurns"]);
     return { snapshot: snapshot2, records };
   }), makeLayerFor(request.dbPath, true));
   return { ...result2, projections: [{ threadId: threadId2, ...readback }] };

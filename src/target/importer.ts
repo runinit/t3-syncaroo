@@ -31,6 +31,7 @@ import { safetyError, writeError } from "../core/errors.js";
 import { resolveProviderSelection, type TargetOverrides } from "./config.js";
 import { assertT3Closed, validateTargetDatabase } from "./schema.js";
 import { listImports, recordImports, type LedgerRecord } from "./ledger.js";
+import { encodeCanonicalHistory, type V2HistoryAsset } from "./v2/history.js";
 
 const EVENT_TYPES = [
   "project.created",
@@ -402,17 +403,24 @@ export function createBackup(db: Database.Database, paths: TargetPaths): string 
   return destination;
 }
 
-export function materializeAssets(plans: PlannedThread[], paths: TargetPaths, runId: string): { created: string[]; cleanup(): void } {
+export function materializeAssets(plans: Array<{ assets: PlannedAsset[] | V2HistoryAsset[] }>, paths: TargetPaths, runId: string): { created: string[]; cleanup(): void } {
   const staging = join(paths.attachmentsDir, `.t3-import-staging-${runId}`);
   mkdirSync(staging, { recursive: true });
   const created: string[] = [];
   try {
     for (const asset of plans.flatMap((plan) => plan.assets)) {
-      if (existsSync(asset.finalPath)) continue;
+      const sourceBytes = asset.data ?? (asset.sourcePath && existsSync(asset.sourcePath) ? readFileSync(asset.sourcePath) : undefined);
+      if (!sourceBytes) throw writeError(`Attachment ${asset.descriptor.name} has no readable local data.`);
+      if (sourceBytes.byteLength !== asset.descriptor.sizeBytes) throw writeError(`Attachment ${asset.descriptor.name} changed size before it could be staged.`);
+      if (existsSync(asset.finalPath)) {
+        if (!readFileSync(asset.finalPath).equals(sourceBytes)) throw safetyError(`The existing T3 image for ${asset.descriptor.name} does not match the source session. Preserve it and resolve the attachment conflict before retrying.`);
+        continue;
+      }
       const temporary = join(staging, basename(asset.finalPath));
       if (asset.data) writeFileSync(temporary, asset.data);
       else if (asset.sourcePath) copyFileSync(asset.sourcePath, temporary);
-      else throw writeError(`Attachment ${asset.descriptor.name} has no local data.`);
+      else throw writeError(`Attachment ${asset.descriptor.name} has no readable local data.`);
+      if (!readFileSync(temporary).equals(sourceBytes)) throw writeError(`Attachment ${asset.descriptor.name} changed while it was being staged.`);
       renameSync(temporary, asset.finalPath);
       created.push(asset.finalPath);
     }
@@ -438,8 +446,11 @@ interface V2ThreadReply {
   events?: Array<{ id: string; sequence: number }>;
   records?: {
     thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string };
-    messages?: Array<{ role: string; text: string }>;
-    providerThreads?: Array<{ appThreadId?: string; driver?: string; providerInstanceId?: string; nativeThreadRef?: { driver?: string; nativeId?: string; strength?: string } }>;
+    messages?: Array<{ id?: string; role: string; text: string; attachments?: Array<Record<string, unknown>> }>;
+    turnItems?: Array<Record<string, unknown>>;
+    plans?: Array<Record<string, unknown>>;
+    providerTurns?: Array<Record<string, unknown>>;
+    providerThreads?: Array<{ appThreadId?: string; driver?: string; providerInstanceId?: string; nativeThreadRef?: { driver?: string; nativeId?: string; strength?: string }; nativeConversationHeadRef?: { driver?: string; nativeId?: string; strength?: string } | null }>;
   };
 }
 
@@ -468,6 +479,10 @@ interface V2Plan {
   projectId: string;
   provider: ReturnType<typeof resolveProviderSelection>;
   events: Array<Record<string, unknown>>;
+  assets: V2HistoryAsset[];
+  warnings: string[];
+  activities: number;
+  attachments: number;
   projectEvent?: Record<string, unknown>;
   messages: Array<{ role: string; text: string }>;
   resumable: boolean;
@@ -516,19 +531,16 @@ function callV2Native(paths: TargetPaths, request: Record<string, unknown>): Pro
   });
 }
 
-function planV2TextThread(selection: ImportSelection, thread: CanonicalThread, paths: TargetPaths, projectId: string, createProject: boolean, providerInstance?: string): V2Plan {
-  if (thread.source !== "codex") throw safetyError("This T3 v2 import slice accepts settled Codex text conversations only.");
-  if (!thread.currentBranch) throw safetyError(`Codex session ${thread.sourceSessionId} has a non-current branch; branch history is not supported by this T3 v2 import slice.`);
+function planV2Thread(selection: ImportSelection, thread: CanonicalThread, paths: TargetPaths, projectId: string, createProject: boolean, providerInstance?: string): V2Plan {
+  if (!thread.currentBranch && thread.source === "codex") throw safetyError(`Codex session ${thread.sourceSessionId} has a non-current branch; branch history is not supported by this T3 v2 import slice.`);
   if (!thread.turns.length || thread.turns.some((turn) => turn.status === "inProgress")) {
-    throw safetyError(`Codex session ${thread.sourceSessionId} is not settled. Select a completed, interrupted, or failed conversation.`);
+    throw safetyError(`${thread.source} session ${thread.sourceSessionId} is not settled. Select a completed, interrupted, or failed conversation.`);
   }
-  const unsupported = thread.turns.find((turn) => turn.activities.length || turn.plans.length || turn.user.attachments.length || turn.assistant.some((message) => message.attachments.length));
-  if (unsupported) throw safetyError(`Codex session ${thread.sourceSessionId} contains activity, plan, or attachment data that this T3 v2 import slice cannot preserve yet.`);
-
-  const threadId = /^[0-9a-f-]{36}$/iu.test(thread.sourceSessionId)
+  const compacted = compactThreadForImport(thread);
+  const threadId = thread.source === "codex" && /^[0-9a-f-]{36}$/iu.test(thread.sourceSessionId)
     ? thread.sourceSessionId
     : deterministicUuid(`t3-import:thread:${thread.sourceKey}`);
-  const provider = resolveProviderSelection(paths, "codex", thread.model, thread.effort, providerInstance);
+  const provider = resolveProviderSelection(paths, thread.source, thread.model, thread.effort, providerInstance);
   const providerThreadId = deterministicUuid(`t3-import:v2:provider-thread:${thread.sourceKey}`);
   const createdAt = thread.createdAt;
   const updatedAt = thread.updatedAt;
@@ -536,60 +548,36 @@ function planV2TextThread(selection: ImportSelection, thread: CanonicalThread, p
   const appThread = {
     createdBy: "system", creationSource: "server", id: threadId, projectId, title,
     providerInstanceId: provider.instanceId, modelSelection: modelSelection(provider),
-    runtimeMode: "full-access", interactionMode: "default", branch: null, worktreePath: null,
+    runtimeMode: "full-access", interactionMode: "default", branch: thread.gitBranch ?? null, worktreePath: null,
     linkedPullRequest: null, branchPullRequest: null, activeProviderThreadId: providerThreadId,
     historyOrigin: "v1_import", lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: threadId },
     forkedFrom: null, createdAt, updatedAt, archivedAt: null, settledOverride: "settled",
     settledAt: updatedAt, unsettledAt: null, snoozedUntil: null, snoozedAt: null, pinnedAt: null,
     pinOrderKey: null, activeOrderKey: null, lastVisitedAt: null, deletedAt: null,
   };
+  const cursor = thread.resumeCursor ?? {};
+  const nativeId = thread.source === "claude" ? thread.sourceSessionId : String(cursor.threadId ?? thread.sourceSessionId);
+  const nativeHead = thread.source === "claude" && typeof cursor.resumeSessionAt === "string" ? cursor.resumeSessionAt : undefined;
+  const nativeDriver = provider.providerName;
+  const canResume = thread.source === "codex" ? Boolean(cursor.threadId) : Boolean(nativeHead);
+  const resumable = optionsResume(selection, thread, canResume);
   const nativeProviderThread = {
-    id: providerThreadId, driver: "codex", providerInstanceId: provider.instanceId, providerSessionId: null,
+    id: providerThreadId, driver: nativeDriver, providerInstanceId: provider.instanceId, providerSessionId: null,
     appThreadId: threadId, ownerNodeId: null,
-    nativeThreadRef: { driver: "codex", nativeId: thread.sourceSessionId, strength: "strong" },
-    nativeConversationHeadRef: null, status: "idle", firstRunOrdinal: null, lastRunOrdinal: null,
+    nativeThreadRef: { driver: nativeDriver, nativeId, strength: "strong" },
+    nativeConversationHeadRef: nativeHead ? { driver: nativeDriver, nativeId: nativeHead, strength: "strong" } : null,
+    status: "idle", firstRunOrdinal: null, lastRunOrdinal: null,
     handoffIds: [], forkedFrom: null, pendingBackgroundTasks: [], createdAt, updatedAt,
   };
+  const history = encodeCanonicalHistory(compacted, threadId, paths.attachmentsDir, thread.turns);
   const events: Array<Record<string, unknown>> = [{
     id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:thread-created`), type: "thread.created",
     threadId, providerInstanceId: provider.instanceId, occurredAt: createdAt, payload: appThread,
-  }];
-  const messages: Array<{ role: string; text: string }> = [];
-  let ordinal = 0;
-  for (const turn of thread.turns) {
-    const entries = [turn.user, ...turn.assistant];
-    for (const message of entries) {
-      ordinal += 1;
-      const messageId = deterministicUuid(`t3-import:v2:message:${thread.sourceKey}:${message.sourceId}`);
-      const itemId = deterministicUuid(`t3-import:v2:turn-item:${thread.sourceKey}:${message.sourceId}`);
-      const at = message.timestamp;
-      const user = message.role === "user";
-      const conversationMessage = {
-        createdBy: user ? "user" : "agent", creationSource: "server", id: messageId,
-        threadId, runId: null, nodeId: null, role: message.role, text: message.text,
-        attachments: [], streaming: false, createdAt: at, updatedAt: at,
-      };
-      const common = {
-        id: itemId, threadId, runId: null, nodeId: null, providerThreadId: null, providerTurnId: null,
-        nativeItemRef: null, parentItemId: null, ordinal, status: "completed", title: null,
-        startedAt: at, completedAt: at, updatedAt: at,
-      };
-      const item = user
-        ? { ...common, createdBy: "user", creationSource: "server", type: "user_message", messageId,
-            inputIntent: "turn_start", text: message.text, attachments: [] }
-        : { ...common, type: "assistant_message", messageId, text: message.text, streaming: false };
-      events.push(
-        { id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:message:${message.sourceId}`), type: "message.updated", threadId, occurredAt: at, payload: conversationMessage },
-        { id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:item:${message.sourceId}`), type: "turn-item.updated", threadId, occurredAt: at, payload: item },
-      );
-      messages.push({ role: message.role, text: message.text });
-    }
-  }
-  events.push({
+  }, ...history.events, {
     id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:provider-thread`), type: "provider-thread.updated",
-    threadId, driver: "codex", providerInstanceId: provider.instanceId, occurredAt: updatedAt,
+    threadId, driver: nativeDriver, providerInstanceId: provider.instanceId, occurredAt: updatedAt,
     payload: nativeProviderThread,
-  });
+  }];
   const projectEvent = createProject ? {
     commandId: deterministicUuid(`t3-import:v2:project-command:${canonicalPath(thread.workspace)}`),
     commandType: "project.create", acceptedAt: createdAt,
@@ -602,7 +590,17 @@ function planV2TextThread(selection: ImportSelection, thread: CanonicalThread, p
         defaultModelSelection: modelSelection(provider), scripts: [], createdAt, updatedAt },
     },
   } : undefined;
-  return { thread, threadId, projectId, provider, events, ...(projectEvent ? { projectEvent } : {}), messages, resumable: selection.resume && Boolean(thread.resumeCursor), fingerprint: selection.conversation.fingerprint };
+  return {
+    thread, threadId, projectId, provider, events,
+    ...(projectEvent ? { projectEvent } : {}), messages: history.messages, assets: history.assets,
+    warnings: [...compacted.warnings.slice(thread.warnings.length), ...history.warnings],
+    activities: history.activities, attachments: history.assets.length,
+    resumable, fingerprint: selection.conversation.fingerprint,
+  };
+}
+
+function optionsResume(selection: ImportSelection, thread: CanonicalThread, canResume: boolean): boolean {
+  return canResume && selection.resume && (thread.source === "claude" || thread.currentBranch);
 }
 
 function v2HistoryMatches(value: V2ThreadReply | undefined, plan: V2Plan): boolean {
@@ -616,12 +614,43 @@ function v2HistoryMatches(value: V2ThreadReply | undefined, plan: V2Plan): boole
     && nativeThread.providerInstanceId === plan.provider.instanceId
     && messages.length === plan.messages.length
     && messages.every((message, index) => message.role === plan.messages[index]?.role && message.text === plan.messages[index]?.text)
+    && v2ProjectedHistoryMatches(value, plan)
     && sessions.some((session) => session.appThreadId === plan.threadId
-      && session.driver === "codex"
+      && session.driver === plan.provider.providerName
       && session.providerInstanceId === plan.provider.instanceId
-      && session.nativeThreadRef?.driver === "codex"
+      && session.nativeThreadRef?.driver === plan.provider.providerName
       && session.nativeThreadRef.strength === "strong"
-      && session.nativeThreadRef.nativeId === plan.thread.sourceSessionId);
+      && session.nativeThreadRef.nativeId === (plan.thread.source === "claude" ? plan.thread.sourceSessionId : String(plan.thread.resumeCursor?.threadId ?? plan.thread.sourceSessionId))
+      && (plan.thread.source !== "claude" || (typeof plan.thread.resumeCursor?.resumeSessionAt === "string"
+        ? session.nativeConversationHeadRef?.driver === plan.provider.providerName && session.nativeConversationHeadRef.nativeId === plan.thread.resumeCursor.resumeSessionAt
+        : session.nativeConversationHeadRef === null)));
+}
+
+function jsonEqual(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function v2ProjectedHistoryMatches(value: V2ThreadReply | undefined, plan: V2Plan): boolean {
+  const records = value?.records;
+  if (!records?.turnItems || !records.plans) return false;
+  const expectedItems = plan.events.filter((event) => event.type === "turn-item.updated").map((event) => event.payload as Record<string, unknown>);
+  if (records.turnItems.length !== expectedItems.length) return false;
+  const actualItems = new Map(records.turnItems.map((item) => [item.id, item]));
+  for (const expected of expectedItems) {
+    const actual = actualItems.get(expected.id);
+    if (!actual) return false;
+    for (const [key, item] of Object.entries(expected)) {
+      if (key === "ordinal") continue;
+      if (!jsonEqual(actual[key], item)) return false;
+    }
+  }
+  const expectedPlans = plan.events.filter((event) => event.type === "plan.updated").map((event) => event.payload as Record<string, unknown>);
+  if (records.plans.length !== expectedPlans.length) return false;
+  const actualPlans = new Map(records.plans.map((item) => [item.id, item]));
+  return expectedPlans.every((expected) => {
+    const actual = actualPlans.get(expected.id);
+    return Boolean(actual && Object.entries(expected).every(([key, item]) => jsonEqual(actual[key], item)));
+  });
 }
 
 function v2EventOwnershipMatches(value: V2ThreadReply | undefined, plan: V2Plan): boolean {
@@ -649,6 +678,24 @@ function v2LedgerRecord(plan: V2Plan, paths: TargetPaths, firstSequence: number,
   };
 }
 
+function verifyOrRecoverV2Assets(plan: V2Plan, paths: TargetPaths, allowMissingRecovery: boolean): void {
+  const missing: V2HistoryAsset[] = [];
+  for (const asset of plan.assets) {
+    const expected = asset.data ?? (asset.sourcePath && existsSync(asset.sourcePath) ? readFileSync(asset.sourcePath) : undefined);
+    if (!expected) throw safetyError(`The source bytes for ${asset.descriptor.name} are unavailable, so T3 image history cannot be verified. Restore the source attachment before retrying.`);
+    if (!existsSync(asset.finalPath)) {
+      missing.push(asset);
+      continue;
+    }
+    const current = readFileSync(asset.finalPath);
+    if (!current.equals(expected)) throw safetyError(`The existing T3 image for ${asset.descriptor.name} does not match the source session. Preserve it and resolve the attachment conflict before retrying.`);
+  }
+  if (missing.length === 0) return;
+  if (!allowMissingRecovery) throw safetyError("T3 has imported image references but the attachment bytes are missing and no matching import checkpoint proves their contents. Restore the verified backup or resolve the attachment conflict before retrying.");
+  const staged = materializeAssets([{ assets: missing }], paths, randomUUID());
+  staged.cleanup();
+}
+
 async function importNightlyV2(
   selections: ImportSelection[],
   paths: TargetPaths,
@@ -666,7 +713,7 @@ async function importNightlyV2(
         const projectedProject = knownProject ?? existingProjectId(db, thread.workspace);
         const projectId = projectedProject ?? deterministicUuid(`t3-import:project:${workspaceKey}`);
         projectIds.set(workspaceKey, projectId);
-        plans.push(planV2TextThread(selection, thread, paths, projectId, !projectedProject, options.providerInstance));
+        plans.push(planV2Thread(selection, thread, paths, projectId, !projectedProject, options.providerInstance));
       }
     }
   } finally {
@@ -712,7 +759,11 @@ async function importNightlyV2(
         catch (error) {
           throw writeError(`T3 already contains the exact imported history for Codex session ${plan.thread.sourceSessionId}, but its external ledger could not be checked: ${error instanceof Error ? error.message : String(error)}. No native events were replayed.`, error);
         }
-        const mapped = ledgerRows.some((row) => row.sourceKey === plan.thread.sourceKey && row.threadId === plan.threadId);
+        const mapped = ledgerRows.find((row) => row.sourceKey === plan.thread.sourceKey && row.threadId === plan.threadId);
+        if (mapped && mapped.sourceFingerprint !== plan.fingerprint) {
+          throw safetyError(`T3 already has this imported task, but its source session has changed since import. Use sync or resolve the history conflict before retrying.`);
+        }
+        verifyOrRecoverV2Assets(plan, paths, Boolean(mapped));
         if (!mapped) {
           const sequences = prior.events!.map((event) => event.sequence);
           const warning = "Recovered the external import ledger from exact native event ownership; the original backup path was not retained.";
@@ -737,11 +788,11 @@ async function importNightlyV2(
     title: plan.thread.title,
     turns: plan.thread.turns.length,
     messages: plan.messages.length,
-    activities: 0,
+    activities: plan.activities,
     events: plan.events.length,
-    attachments: 0,
+    attachments: plan.attachments,
     resumable: plan.resumable,
-    warnings: [...plan.thread.warnings, ...(plan.provider.warning ? [plan.provider.warning] : []), ...(existing.has(plan.threadId) && recoveryWarnings.length ? ["An external import ledger mapping was recovered for this T3 history."] : [])],
+    warnings: [...plan.thread.warnings, ...plan.warnings, ...(plan.provider.warning ? [plan.provider.warning] : []), ...(existing.has(plan.threadId) && recoveryWarnings.length ? ["An external import ledger mapping was recovered for this T3 history."] : [])],
   }));
   const pending = plans.filter((plan) => !existing.has(plan.threadId));
   if (options.dryRun || pending.length === 0) {
@@ -755,12 +806,25 @@ async function importNightlyV2(
 
   const warnings: string[] = [];
   for (const plan of pending) {
+    const assets = materializeAssets([plan], paths, randomUUID());
     let write: V2NativeReply;
     try {
       write = await callV2Native(paths, { op: "write", ...(plan.projectEvent ? { projectEvent: plan.projectEvent } : {}), events: plan.events });
     } catch (error) {
+      assets.cleanup();
+      try {
+        const afterFailure = await callV2Native(paths, { op: "inspect", threadIds: [plan.threadId], projectIds: [] });
+        const failedThread = afterFailure.threads?.find((thread) => thread.threadId === plan.threadId);
+        if (failedThread?.exists === false && failedThread.events?.length === 0) {
+          for (const path of assets.created) rmSync(path, { force: true });
+        }
+      } catch {
+        // If the helper cannot confirm rollback, retain bytes so a possibly
+        // committed native history cannot be left pointing at missing images.
+      }
       throw writeError(`${error instanceof Error ? error.message : String(error)} The verified backup is ${backup}.`, error);
     }
+    assets.cleanup();
     const result = results.find((item) => item.threadId === plan.threadId)!;
     const sequenceRange = write.storedSequenceRange ?? (write.firstSequence && write.lastSequence ? { first: write.firstSequence, last: write.lastSequence } : undefined);
     const projection = write.projections?.find((thread) => thread.threadId === plan.threadId);
