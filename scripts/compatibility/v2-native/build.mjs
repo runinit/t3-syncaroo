@@ -4,6 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { assertCompleteLicenseNotices, readPackageLicenseNotices } from './license-gate.mjs';
+import { assertExactSourceSet } from './source-lock-gate.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const sourceLockPath = join(root, 'scripts/compatibility/v2-native/source-lock.json');
@@ -94,8 +95,22 @@ const pkg = { name: '@t3-import/t3-v2-native-proof', version: '0.0.0-proof', pri
 await writeFile(join(candidate, 'package.json'), `${JSON.stringify(pkg, null, 2)}\n`);
 
 const meta = JSON.parse(await readFile(metafile, 'utf8'));
+const fixtureTraceMeta = JSON.parse(await readFile(fixtureMeta, 'utf8'));
+function tracedT3SourcePaths(traceMeta) {
+  const marker = `/t3code-${commit}/`;
+  return Object.keys(traceMeta.inputs).flatMap((input) => {
+    const normalized = input.replaceAll('\\', '/');
+    const index = normalized.indexOf(marker);
+    if (index < 0) return [];
+    const path = normalized.slice(index + marker.length);
+    return path.includes('/node_modules/') || path.startsWith('node_modules/') ? [] : [path];
+  }).sort();
+}
+const own = tracedT3SourcePaths(meta);
+const fixtureSources = tracedT3SourcePaths(fixtureTraceMeta);
+assertExactSourceSet('helper', sourceLock.sourceFiles.map((source) => source.path), own);
+assertExactSourceSet('fixture', sourceLock.fixtureSourceFiles.map((source) => source.path), fixtureSources);
 const files = Object.keys(meta.inputs);
-const own = files.filter((p) => p.includes(`/t3code-${commit}/`) && !p.includes('/node_modules/'));
 const dependencyPaths = files.filter((p) => p.includes('/node_modules/.pnpm/'));
 const packageRoots = new Map();
 for (const input of dependencyPaths) {
@@ -166,7 +181,7 @@ const provenance = {
   esbuildVersion,
   esbuildTarballIntegrities: buildToolLock.packages.map(({ name, version, integrity }) => ({ name, version, integrity })),
   nodeTarget: 'node22',
-  sourceFiles: own.map((p) => p.slice(p.indexOf(`/t3code-${commit}/`) + `/t3code-${commit}/`.length)).sort(),
+  sourceFiles: own,
   bundledDependencyCount: packageEntries.length,
   bundledDependencyLicenses: packageEntries.map(({ name, version, license, pnpmIntegrity, licenseFiles }) => ({
     name, version, license, pnpmIntegrity, licenseFiles: licenseFiles.map(({ file, text }) => ({ file, sha256: sha256(Buffer.from(text)) })),

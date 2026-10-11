@@ -8,16 +8,18 @@ does not integrate the helper into t3-import's production package or CLI.
 ## Reproduce
 
 From the repository root, prepare the pinned source checkout and dependencies,
-then build and run the proof:
+then build and run the proof. The two small lock-gate checks can be run with:
 
 ```sh
 node scripts/compatibility/v2-proof/prepare.mjs
 node scripts/compatibility/v2-native/build.mjs
+node scripts/compatibility/v2-native/license-gate.test.mjs
+node scripts/compatibility/v2-native/source-lock-gate.test.mjs
 ```
 
 Preparation downloads the pinned source material and installs the filtered T3
 workspace dependency graph. The build verifies the pinned T3 release archive,
-pnpm lockfile, every traced T3 source file, and the exact esbuild/npm tarball
+pnpm lockfile, every traced T3 source file, the exact traced source-file sets for both bundles, and the exact esbuild/npm tarball
 integrities in `source-lock.json` and `build-tool-lock.json`. This build-tool
 lock currently covers Linux x64 only. The build emits a fixture-only migration
 runner and candidate helper under ignored `artifacts/v2-native/`, creates an
