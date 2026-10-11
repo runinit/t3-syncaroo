@@ -10,6 +10,7 @@
 
 - [ ] With T3 closed, the importer previews the selected path, defaults to validated `statev2.sqlite` when present, honors explicit `--db`, and refuses invalid or unsupported v2 without falling back to `state.sqlite`.
 - [ ] The packed CLI writes a text conversation and strong Codex provider-session binding through the pinned native sink; T3 reads the task after reopening the database.
+- [ ] Before writing, the importer checks integrity and runtime/projection safety, makes and verifies a backup, and applies the validated v2 cache and startup event-budget rules.
 - [ ] Dry run performs no writes; retries do not duplicate tasks; write failures roll back events and projections, retain the verified backup, and clean up only staged files from that attempt.
 - [ ] v2 operations enforce the pinned SQLite runtime requirement; legacy migrations 40–53 behavior and declared Node.js support remain intact.
 - [ ] A clean packed consumer can run the helper without a T3 checkout or development dependency store, and bundled T3 license notices are included.

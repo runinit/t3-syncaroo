@@ -9,5 +9,5 @@
 **Status:** ready-for-agent
 
 - [ ] The deterministic built-in thread identity, project, provider, source session, and full supported canonical history are verified before adoption.
-- [ ] An exact match gains t3-import synchronization and replacement ownership without creating another task.
+- [ ] An exact match gains t3-import synchronization and replacement ownership without creating another task; eligible source-session continuation remains attached to the adopted task.
 - [ ] Reduced, divergent, incomplete, or ambiguous histories are reported as actionable conflicts; matching title or `historyOrigin` alone never establishes a match.
