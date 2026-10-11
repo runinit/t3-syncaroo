@@ -2,7 +2,7 @@
   "t3SourceCommit": "ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e",
   "t3ReleaseArchiveSha256": "88914520008d33477f78b15f86346958c4422bc5806effa76761f97344fd2e65",
   "t3PnpmLockSha256": "7ad8c525839cbb18b3d376a7fa7bddd9a9ba5deaba7d4cf8efb79daa5b890833",
-  "bundledHelperSha256": "7601bf3d551f3e1b4d635879dc754881c511dfe68d8855b8f9fe37d7a3964073",
+  "bundledHelperSha256": "36cc74622af7ab0e6025a4c03181100e98101d457f89d4545fee0174d3070ad8",
   "esbuildVersion": "0.25.12",
   "esbuildTarballIntegrities": [
     {

@@ -439,22 +439,22 @@ function aggregateStatus(results: ImportItemResult[], dryRun: boolean): ImportRu
   return statuses.has("already-imported") ? "already-imported" : "imported";
 }
 
-interface V2ThreadReply {
+export interface V2ThreadReply {
   threadId: string;
   exists: boolean;
-  thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string } | null;
+  thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string; activeProviderThreadId?: string } | null;
   events?: Array<{ id: string; sequence: number }>;
   records?: {
-    thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string };
-    messages?: Array<{ id?: string; role: string; text: string; attachments?: Array<Record<string, unknown>> }>;
+    thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string; activeProviderThreadId?: string };
+    messages?: Array<{ id: string; threadId?: string; role: string; text: string; attachments?: Array<Record<string, unknown>>; createdAt?: string }>;
     turnItems?: Array<Record<string, unknown>>;
     plans?: Array<Record<string, unknown>>;
     providerTurns?: Array<Record<string, unknown>>;
-    providerThreads?: Array<{ appThreadId?: string; driver?: string; providerInstanceId?: string; nativeThreadRef?: { driver?: string; nativeId?: string; strength?: string }; nativeConversationHeadRef?: { driver?: string; nativeId?: string; strength?: string } | null }>;
+    providerThreads?: Array<{ id: string; appThreadId?: string; driver?: string; providerInstanceId?: string; nativeThreadRef?: { driver?: string; nativeId?: string; strength?: string } | null; nativeConversationHeadRef?: { driver?: string; nativeId?: string; strength?: string } | null }>;
   };
 }
 
-interface V2NativeReply {
+export interface V2NativeReply {
   ok: boolean;
   error?: string;
   integrity?: string;
@@ -473,7 +473,7 @@ interface V2NativeReply {
   projectCompensated?: boolean;
 }
 
-interface V2Plan {
+export interface V2Plan {
   thread: CanonicalThread;
   threadId: string;
   projectId: string;
@@ -499,7 +499,7 @@ function v2HelperPath(): string {
   return helper;
 }
 
-function callV2Native(paths: TargetPaths, request: Record<string, unknown>): Promise<V2NativeReply> {
+export function callV2Native(paths: TargetPaths, request: Record<string, unknown>): Promise<V2NativeReply> {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [v2HelperPath()], { stdio: ["pipe", "pipe", "pipe"] });
     let stdout = "";
@@ -531,7 +531,7 @@ function callV2Native(paths: TargetPaths, request: Record<string, unknown>): Pro
   });
 }
 
-function planV2Thread(selection: ImportSelection, thread: CanonicalThread, paths: TargetPaths, projectId: string, createProject: boolean, providerInstance?: string): V2Plan {
+export function planV2Thread(selection: ImportSelection, thread: CanonicalThread, paths: TargetPaths, projectId: string, createProject: boolean, providerInstance?: string): V2Plan {
   if (!thread.currentBranch && thread.source === "codex") throw safetyError(`Codex session ${thread.sourceSessionId} has a non-current branch; branch history is not supported by this T3 v2 import slice.`);
   if (!thread.turns.length || thread.turns.some((turn) => turn.status === "inProgress")) {
     throw safetyError(`${thread.source} session ${thread.sourceSessionId} is not settled. Select a completed, interrupted, or failed conversation.`);
@@ -564,8 +564,8 @@ function planV2Thread(selection: ImportSelection, thread: CanonicalThread, paths
   const nativeProviderThread = {
     id: providerThreadId, driver: nativeDriver, providerInstanceId: provider.instanceId, providerSessionId: null,
     appThreadId: threadId, ownerNodeId: null,
-    nativeThreadRef: { driver: nativeDriver, nativeId, strength: "strong" },
-    nativeConversationHeadRef: nativeHead ? { driver: nativeDriver, nativeId: nativeHead, strength: "strong" } : null,
+    nativeThreadRef: resumable ? { driver: nativeDriver, nativeId, strength: "strong" } : null,
+    nativeConversationHeadRef: resumable && nativeHead ? { driver: nativeDriver, nativeId: nativeHead, strength: "strong" } : null,
     status: "idle", firstRunOrdinal: null, lastRunOrdinal: null,
     handoffIds: [], forkedFrom: null, pendingBackgroundTasks: [], createdAt, updatedAt,
   };
@@ -618,12 +618,14 @@ function v2HistoryMatches(value: V2ThreadReply | undefined, plan: V2Plan): boole
     && sessions.some((session) => session.appThreadId === plan.threadId
       && session.driver === plan.provider.providerName
       && session.providerInstanceId === plan.provider.instanceId
-      && session.nativeThreadRef?.driver === plan.provider.providerName
-      && session.nativeThreadRef.strength === "strong"
-      && session.nativeThreadRef.nativeId === (plan.thread.source === "claude" ? plan.thread.sourceSessionId : String(plan.thread.resumeCursor?.threadId ?? plan.thread.sourceSessionId))
-      && (plan.thread.source !== "claude" || (typeof plan.thread.resumeCursor?.resumeSessionAt === "string"
-        ? session.nativeConversationHeadRef?.driver === plan.provider.providerName && session.nativeConversationHeadRef.nativeId === plan.thread.resumeCursor.resumeSessionAt
-        : session.nativeConversationHeadRef === null)));
+      && (plan.resumable
+        ? session.nativeThreadRef?.driver === plan.provider.providerName
+          && session.nativeThreadRef.strength === "strong"
+          && session.nativeThreadRef.nativeId === (plan.thread.source === "claude" ? plan.thread.sourceSessionId : String(plan.thread.resumeCursor?.threadId ?? plan.thread.sourceSessionId))
+          && (plan.thread.source !== "claude" || (typeof plan.thread.resumeCursor?.resumeSessionAt === "string"
+            ? session.nativeConversationHeadRef?.driver === plan.provider.providerName && session.nativeConversationHeadRef.nativeId === plan.thread.resumeCursor.resumeSessionAt
+            : session.nativeConversationHeadRef === null))
+        : session.nativeThreadRef === null && session.nativeConversationHeadRef === null));
 }
 
 function jsonEqual(left: unknown, right: unknown): boolean {
@@ -674,6 +676,7 @@ function v2LedgerRecord(plan: V2Plan, paths: TargetPaths, firstSequence: number,
     resumable: plan.resumable, backupPath, warnings,
     identitySeed: plan.thread.sourceKey, currentSourceKey: plan.thread.sourceKey,
     ...(plan.thread.leafId ? { sourceLeafId: plan.thread.leafId } : {}),
+    ...(plan.resumable && plan.thread.source === "claude" && typeof plan.thread.resumeCursor?.resumeSessionAt === "string" ? { nativeConversationHeadId: plan.thread.resumeCursor.resumeSessionAt } : {}),
     sourceTitle: plan.thread.title, checkpoint: checkpointForThread(plan.thread), isCanonical: true,
   };
 }

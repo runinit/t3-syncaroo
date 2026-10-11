@@ -30,6 +30,7 @@ import {
   projectionBacklog,
   type PlannedThread,
 } from "./importer.js";
+import { inspectV2ConversationSync, syncV2Conversations } from "./v2/sync.js";
 
 export interface SyncOptions extends TargetOverrides {
   dryRun: boolean;
@@ -436,7 +437,11 @@ function aggregate(results: SyncItemResult[], dryRun: boolean): SyncRunResult["s
 export async function inspectConversationSync(conversation: CanonicalConversation, paths: TargetPaths): Promise<ConversationSyncPreview> {
   const db = new Database(paths.dbPath, { readonly: true, fileMustExist: true });
   try {
-    validateTargetDatabase(db);
+    const schema = validateTargetDatabase(db);
+    if (schema.profile === "nightly-v2") {
+      db.close();
+      return await inspectV2ConversationSync(conversation, paths);
+    }
     const plan = buildPlan(db, paths, conversation, false);
     const result = plan.result;
     const activeOnly = plan.thread.turns.length === 0 && (plan.thread.ignoredInProgressTurns ?? 0) > 0;
@@ -457,10 +462,15 @@ export async function inspectConversationSync(conversation: CanonicalConversatio
       selectable: status === "new" || status === "syncable", previouslyImported: plan.previouslyImported,
       ...(result.threadId ? { threadId: result.threadId } : {}), warnings: result.warnings,
     };
-  } finally { db.close(); }
+  } finally { if (db.open) db.close(); }
 }
 
 export async function syncConversations(selections: SyncSelection[], paths: TargetPaths, options: SyncOptions): Promise<SyncRunResult> {
+  const profileDb = new Database(paths.dbPath, { readonly: true, fileMustExist: true });
+  let profile: ReturnType<typeof validateTargetDatabase>["profile"];
+  try { profile = validateTargetDatabase(profileDb).profile; }
+  finally { profileDb.close(); }
+  if (profile === "nightly-v2") return syncV2Conversations(selections, paths, options);
   await assertT3Closed(paths);
   const releaseLock = options.dryRun ? () => {} : acquireLock(paths);
   const db = new Database(paths.dbPath, { readonly: options.dryRun, fileMustExist: true });

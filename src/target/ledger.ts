@@ -23,6 +23,7 @@ export interface LedgerRecord {
   identitySeed: string;
   currentSourceKey: string;
   sourceLeafId?: string;
+  nativeConversationHeadId?: string;
   sourceTitle: string;
   checkpoint: ImportCheckpoint;
   syncedAt?: string;
@@ -66,6 +67,7 @@ function openLedger(): Database.Database {
     ["identity_seed", "TEXT"],
     ["current_source_key", "TEXT"],
     ["source_leaf_id", "TEXT"],
+    ["native_conversation_head_id", "TEXT"],
     ["source_title", "TEXT"],
     ["checkpoint_version", "INTEGER"],
     ["checkpoint_json", "TEXT"],
@@ -87,10 +89,10 @@ export function recordImports(records: LedgerRecord[]): void {
         target_id, source, source_session_id, source_key, source_fingerprint,
         project_id, thread_id, imported_at, importer_version, migration,
         first_sequence, last_sequence, resumable, backup_path, warnings_json,
-        identity_seed, current_source_key, source_leaf_id, source_title,
+        identity_seed, current_source_key, source_leaf_id, source_title, native_conversation_head_id,
         checkpoint_version, checkpoint_json, synced_at, is_canonical,
         superseded_by_thread_id, replaced_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     db.transaction(() => {
       for (const row of records) insert.run(
@@ -98,7 +100,7 @@ export function recordImports(records: LedgerRecord[]): void {
         row.projectId, row.threadId, row.importedAt, row.importerVersion, row.migration,
         row.firstSequence, row.lastSequence, row.resumable ? 1 : 0, row.backupPath,
         JSON.stringify(row.warnings), row.identitySeed, row.currentSourceKey,
-        row.sourceLeafId ?? null, row.sourceTitle, row.checkpoint.version,
+        row.sourceLeafId ?? null, row.sourceTitle, row.nativeConversationHeadId ?? null, row.checkpoint.version,
         JSON.stringify(row.checkpoint), row.syncedAt ?? null, row.isCanonical ? 1 : 0,
         row.supersededByThreadId ?? null, row.replacedAt ?? null,
       );
@@ -125,6 +127,7 @@ interface RawLedgerRow {
   identity_seed: string | null;
   current_source_key: string | null;
   source_leaf_id: string | null;
+  native_conversation_head_id: string | null;
   source_title: string | null;
   checkpoint_json: string | null;
   synced_at: string | null;
@@ -157,6 +160,7 @@ function decodeRow(row: RawLedgerRow): StoredLedgerRecord {
     identitySeed: row.identity_seed ?? row.source_key,
     currentSourceKey: row.current_source_key ?? row.source_key,
     ...(row.source_leaf_id ? { sourceLeafId: row.source_leaf_id } : {}),
+    ...(row.native_conversation_head_id ? { nativeConversationHeadId: row.native_conversation_head_id } : {}),
     sourceTitle: row.source_title ?? "",
     ...(checkpoint ? { checkpoint } : {}),
     ...(row.synced_at ? { syncedAt: row.synced_at } : {}),

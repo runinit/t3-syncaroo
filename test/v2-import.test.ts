@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { canonicalConversation, canonicalThread, eventCount } from "./helpers.js";
 import { resolveTargetPaths } from "../src/target/config.js";
 import { importConversations } from "../src/target/importer.js";
+import { inspectConversationSync, syncConversations } from "../src/target/sync.js";
 import { deterministicUuid } from "../src/core/util.js";
 
 const fixture = process.env.T3_V2_FIXTURE_DB;
@@ -21,6 +22,166 @@ afterEach(() => {
 });
 
 describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 import", () => {
+  it("does not create a native continuation binding when resume was declined", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-v2-no-resume-"));
+    const workspace = join(root, "workspace");
+    const dbPath = join(root, "userdata", "statev2.sqlite");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(join(root, "userdata"), { recursive: true });
+    copyFileSync(fixture!, dbPath);
+    process.env.T3_IMPORT_DATA_DIR = join(root, "ledger");
+    const paths = resolveTargetPaths({ dbPath });
+    const thread = canonicalThread(workspace);
+    thread.turns[0]!.activities = [];
+    const result = await importConversations([{ conversation: canonicalConversation(workspace, thread), resume: false }], paths, { dryRun: false, resume: false });
+    expect(result.results[0]!.resumable).toBe(false);
+    const inspected = JSON.parse(execFileSync(process.execPath, [helper], {
+      input: JSON.stringify({ op: "inspect", dbPath, threadIds: [result.results[0]!.threadId] }),
+      encoding: "utf8",
+    })) as { threads: Array<{ records: { providerThreads: Array<{ nativeThreadRef: unknown; nativeConversationHeadRef: unknown }> } }> };
+    expect(inspected.threads[0]!.records.providerThreads).toHaveLength(1);
+    expect(inspected.threads[0]!.records.providerThreads[0]).toMatchObject({ nativeThreadRef: null, nativeConversationHeadRef: null });
+  });
+
+  it("synchronizes only settled source turns through the native v2 path", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-v2-sync-"));
+    const workspace = join(root, "workspace");
+    const dbPath = join(root, "userdata", "statev2.sqlite");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(join(root, "userdata"), { recursive: true });
+    copyFileSync(fixture!, dbPath);
+    process.env.T3_IMPORT_DATA_DIR = join(root, "ledger");
+    const paths = resolveTargetPaths({ dbPath });
+    const original = canonicalThread(workspace);
+    original.turns[0]!.activities = [];
+    const initial = canonicalConversation(workspace, original);
+    const imported = await importConversations([{ conversation: initial, resume: true }], paths, { dryRun: false, resume: true });
+    expect(imported.status).toBe("imported");
+
+    const updated = structuredClone(original);
+    const next = structuredClone(updated.turns[0]!);
+    next.id = "turn-v2-sync-2";
+    next.user.sourceId = "user-v2-sync-2";
+    next.user.text = "Continue from the original session";
+    next.assistant[0]!.sourceId = "assistant-v2-sync-2";
+    next.assistant[0]!.text = "The original session continued";
+    updated.turns.push(next);
+    const active = structuredClone(next);
+    active.id = "turn-v2-sync-active";
+    active.user.sourceId = "user-v2-sync-active";
+    active.assistant[0]!.sourceId = "assistant-v2-sync-active";
+    active.status = "inProgress";
+    delete active.completedAt;
+    updated.turns.push(active);
+    const advanced = canonicalConversation(workspace, updated);
+
+    expect(await inspectConversationSync(advanced, paths)).toMatchObject({ status: "syncable", newTurns: 1, ignoredActiveTurns: 1 });
+    const before = eventCount(dbPath);
+    const first = await syncConversations([{ conversation: advanced }], paths, { dryRun: false });
+    expect(first.results[0]).toMatchObject({ status: "synced", turnsAdded: 1 });
+    const after = eventCount(dbPath);
+    expect(after).toBeGreaterThan(before);
+    const repeated = await syncConversations([{ conversation: advanced }], paths, { dryRun: false });
+    expect(repeated.results[0]).toMatchObject({ status: "up-to-date", turnsAdded: 0, events: 0 });
+    expect(eventCount(dbPath)).toBe(after);
+  });
+
+  it("continues a Claude session as its source leaf advances", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-v2-claude-sync-"));
+    const workspace = join(root, "workspace");
+    const dbPath = join(root, "userdata", "statev2.sqlite");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(join(root, "userdata"), { recursive: true });
+    copyFileSync(fixture!, dbPath);
+    process.env.T3_IMPORT_DATA_DIR = join(root, "ledger");
+    const paths = resolveTargetPaths({ dbPath });
+    const thread = canonicalThread(workspace);
+    const sessionId = "claude-session-04";
+    thread.source = "claude";
+    thread.sourceSessionId = sessionId;
+    thread.leafId = "leaf-before";
+    thread.sourceKey = `claude:${sessionId}:leaf-before`;
+    thread.resumeCursor = { resumeSessionAt: "leaf-before" };
+    const initial = canonicalConversation(workspace, thread);
+    initial.summary.source = "claude";
+    initial.summary.id = sessionId;
+    const imported = await importConversations([{ conversation: initial, resume: true }], paths, { dryRun: false, resume: true });
+    expect(imported.results[0]!.resumable).toBe(true);
+
+    const advanced = structuredClone(thread);
+    advanced.leafId = "leaf-after";
+    advanced.sourceKey = `claude:${sessionId}:leaf-after`;
+    advanced.resumeCursor = { resumeSessionAt: "leaf-after" };
+    advanced.updatedAt = "2026-01-01T00:00:08.000Z";
+    const next = structuredClone(thread.turns[0]!);
+    next.id = "claude-turn-2";
+    next.user.sourceId = "claude-user-2";
+    next.user.text = "Continue";
+    next.assistant[0]!.sourceId = "claude-assistant-2";
+    next.assistant[0]!.text = "Continued";
+    next.activities = [];
+    advanced.turns.push(next);
+    const advancedConversation = canonicalConversation(workspace, advanced);
+    advancedConversation.summary.source = "claude";
+    advancedConversation.summary.id = sessionId;
+    advancedConversation.summary.branches = 2;
+    advancedConversation.summary.updatedAt = advanced.updatedAt;
+    const alternate = structuredClone(thread);
+    alternate.currentBranch = false;
+    alternate.leafId = "alternate-leaf";
+    alternate.sourceKey = `claude:${sessionId}:alternate-leaf`;
+    advancedConversation.threads.push(alternate);
+    const synced = await syncConversations([{ conversation: advancedConversation }], paths, { dryRun: false });
+    expect(synced.results[0]).toMatchObject({ status: "synced", turnsAdded: 1, resumable: true });
+    const inspected = JSON.parse(execFileSync(process.execPath, [helper], {
+      input: JSON.stringify({ op: "inspect", dbPath, threadIds: [imported.results[0]!.threadId] }),
+      encoding: "utf8",
+    })) as { threads: Array<{ records: { providerThreads: Array<{ nativeThreadRef: { nativeId: string }; nativeConversationHeadRef: { nativeId: string } }> } }> };
+    expect(inspected.threads[0]!.records.providerThreads[0]).toMatchObject({
+      nativeThreadRef: { nativeId: sessionId }, nativeConversationHeadRef: { nativeId: "leaf-after" },
+    });
+    const beforeAmbiguousSync = eventCount(dbPath);
+    const ambiguous = structuredClone(advancedConversation);
+    ambiguous.threads[1]!.currentBranch = true;
+    const rejected = await syncConversations([{ conversation: ambiguous }], paths, { dryRun: false });
+    expect(rejected.results[0]!.status).toBe("branch-sync-unsupported");
+    expect(eventCount(dbPath)).toBe(beforeAmbiguousSync);
+  });
+
+  it("reports edited or deleted imported source history without modifying the native task", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-v2-sync-conflict-"));
+    const workspace = join(root, "workspace");
+    const dbPath = join(root, "userdata", "statev2.sqlite");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(join(root, "userdata"), { recursive: true });
+    copyFileSync(fixture!, dbPath);
+    process.env.T3_IMPORT_DATA_DIR = join(root, "ledger");
+    const paths = resolveTargetPaths({ dbPath });
+    const original = canonicalThread(workspace);
+    original.turns[0]!.activities = [];
+    await importConversations([{ conversation: canonicalConversation(workspace, original), resume: true }], paths, { dryRun: false, resume: true });
+    const edited = structuredClone(original);
+    edited.turns[0]!.user.text = "An edit to imported history";
+    const next = structuredClone(edited.turns[0]!);
+    next.id = "turn-v2-conflict-next";
+    next.user.sourceId = "user-v2-conflict-next";
+    next.assistant[0]!.sourceId = "assistant-v2-conflict-next";
+    edited.turns.push(next);
+    const before = eventCount(dbPath);
+
+    const preview = await inspectConversationSync(canonicalConversation(workspace, edited), paths);
+    expect(preview).toMatchObject({ status: "history-diverged", previouslyImported: true, selectable: false });
+    const deleted = structuredClone(original);
+    deleted.turns = [];
+    const deletedResult = await syncConversations([{ conversation: canonicalConversation(workspace, deleted) }], paths, { dryRun: false });
+    expect(deletedResult.results[0]!.status).toBe("history-diverged");
+    expect(eventCount(dbPath)).toBe(before);
+    const result = await syncConversations([{ conversation: canonicalConversation(workspace, edited) }], paths, { dryRun: false });
+    expect(result).toMatchObject({ status: "conflict", hasConflicts: true, backup: null });
+    expect(result.results[0]!.status).toBe("history-diverged");
+    expect(eventCount(dbPath)).toBe(before);
+  });
+
   it("writes, reopens, safely retries, and rejects divergent history through the public importer", async () => {
     const root = await mkdtemp(join(tmpdir(), "t3-import-v2-public-"));
     const workspace = join(root, "workspace");
