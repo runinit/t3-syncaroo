@@ -125,7 +125,7 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 replacem
 
   it("transfers the exact Claude source session and assistant branch head", async () => {
     const sessionId = "claude-replace-session";
-    const { paths, conversation, oldThreadId } = await setup("t3-v2-replace-claude-", (thread) => {
+    const { root, paths, conversation, oldThreadId } = await setup("t3-v2-replace-claude-", (thread) => {
       thread.source = "claude";
       thread.sourceSessionId = sessionId;
       thread.sourceKey = `claude:${sessionId}:leaf-1`;
@@ -145,5 +145,27 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 replacem
       nativeThreadRef: { nativeId: sessionId, strength: "strong" },
       nativeConversationHeadRef: { nativeId: "assistant-current", strength: "strong" },
     });
+    const ledger = new Database(join(root, "ledger", "ledger.sqlite"), { readonly: true });
+    expect(ledger.prepare("SELECT native_conversation_head_id FROM imports WHERE thread_id = ? AND is_canonical = 1").get(newThreadId))
+      .toEqual({ native_conversation_head_id: "assistant-current" });
+    ledger.close();
+
+    const advanced = structuredClone(conversation);
+    const nextTurn = structuredClone(advanced.threads[0]!.turns[0]!);
+    nextTurn.id = "claude-replacement-followup-turn";
+    nextTurn.user.sourceId = "claude-replacement-followup-user";
+    nextTurn.user.text = "Continue Claude after replacement";
+    nextTurn.assistant[0]!.sourceId = "assistant-after-replacement:text:0";
+    nextTurn.assistant[0]!.text = "The replaced Claude task keeps its source head";
+    advanced.threads[0]!.turns.push(nextTurn);
+    advanced.threads[0]!.resumeCursor = {
+      ...advanced.threads[0]!.resumeCursor,
+      resumeSessionAt: "assistant-after-replacement",
+      turnCount: 2,
+    };
+    advanced.fingerprint = "claude-replacement-followup-fingerprint";
+    expect(await inspectConversationSync(advanced, paths)).toMatchObject({ status: "syncable", newTurns: 1 });
+    const synced = await syncConversations([{ conversation: advanced }], paths, { dryRun: false });
+    expect(synced.results[0]).toMatchObject({ status: "synced", threadId: newThreadId, turnsAdded: 1 });
   });
 });
