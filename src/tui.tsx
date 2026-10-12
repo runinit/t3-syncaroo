@@ -66,6 +66,10 @@ export function operationNextAction(status: string): string {
 }
 
 export function OperationItemWarnings({ title, status, warnings }: { title: string; status: string; warnings: string[] }): React.JSX.Element | null {
+  if (status === "adopted") return <Box flexDirection="column">
+    <Text color="green">Adopted the existing T3 task after verifying its history. Future import retries will report already-imported.</Text>
+    {warnings.map((warning, index) => <Text key={`${title}:${index}`} color="yellow">Warning · {title}: {warning}</Text>)}
+  </Box>;
   if (warnings.length === 0 && !["history-diverged", "active-source", "target-missing", "not-imported", "branch-sync-unsupported", "branch-replace-unsupported"].includes(status)) return null;
   return <Box flexDirection="column">
     {warnings.map((warning, index) => <Text key={`${title}:${index}`} color="yellow">Warning · {title}: {warning}</Text>)}
@@ -436,12 +440,12 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
           ? await importConversations(preparedImports, paths, { dryRun: false, resume: true, ...(provider ? { providerInstance: provider } : {}) })
           : undefined;
         const synced = preparedSync.length
-          ? await syncConversations(preparedSync, paths, { dryRun: false, allowProjectionBacklog: Boolean(imported?.results.some((item) => item.status === "imported")) })
+          ? await syncConversations(preparedSync, paths, { dryRun: false, allowProjectionBacklog: Boolean(imported?.results.some((item) => item.status === "imported" || item.status === "adopted")) })
           : undefined;
         const replaced = preparedReplacements.length
           ? await replaceConversations(preparedReplacements, paths, { dryRun: false })
           : undefined;
-        const changed = Boolean(imported?.results.some((item) => item.status === "imported")) || Boolean(synced?.results.some((item) => item.status === "synced")) || Boolean(replaced?.results.some((item) => item.status === "replaced"));
+        const changed = Boolean(imported?.results.some((item) => item.status === "imported" || item.status === "adopted")) || Boolean(synced?.results.some((item) => item.status === "synced")) || Boolean(replaced?.results.some((item) => item.status === "replaced"));
         if (resetCache && changed) {
           try {
             const cache = await resetT3RebuildableCache(paths);
@@ -522,9 +526,9 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
       {screen === "running" && <Text>Backing up and reconciling conversations…</Text>}
       {screen === "result" && (result || syncResult || replaceResult || scopedSourceOutcomes.length > 0 || sourceDiagnostics.length > 0) && <>
         <Text bold color={scopedSourceOutcomes.length || sourceDiagnostics.length || hasOperationIssues ? "yellow" : "green"}>{resultHeading(Boolean(scopedSourceOutcomes.length || sourceDiagnostics.length || hasOperationIssues))}</Text>
-        <Text dimColor>Classified {outcomeCounts.classified} sessions: {outcomeCounts.imported} imported · {outcomeCounts.synced} synced · {outcomeCounts.replaced} replaced · {outcomeCounts.alreadyImported} already current · {outcomeCounts.deferred} deferred · {outcomeCounts.conflict} conflicts · {outcomeCounts.unsupported} unsupported · {outcomeCounts.failed} failed. Provider-wide scan diagnostics: {outcomeCounts.scanDiagnostics}.</Text>
+        <Text dimColor>Classified {outcomeCounts.classified} sessions: {outcomeCounts.imported} imported · {outcomeCounts.adopted} adopted · {outcomeCounts.synced} synced · {outcomeCounts.replaced} replaced · {outcomeCounts.alreadyImported} already current · {outcomeCounts.deferred} deferred · {outcomeCounts.conflict} conflicts · {outcomeCounts.unsupported} unsupported · {outcomeCounts.failed} failed. Provider-wide scan diagnostics: {outcomeCounts.scanDiagnostics}.</Text>
         {result ? <Text>Import backup: {result.backup ?? "not needed"}</Text> : null}
-        {result?.results.map((item) => <Box key={`import:${item.threadId}`} flexDirection="column"><Text>{item.status === "imported" ? "✓" : item.status === "conflict" ? "!" : "•"} {item.title} — {item.status}, {item.turns} turns, {item.events} events</Text><OperationItemWarnings title={item.title} status={item.status} warnings={item.warnings} /></Box>)}
+        {result?.results.map((item) => <Box key={`import:${item.threadId}`} flexDirection="column"><Text>{["imported", "adopted", "already-imported"].includes(item.status) ? "✓" : item.status === "conflict" ? "!" : "•"} {item.title} — {item.status}, {item.turns} turns, {item.events} events</Text><OperationItemWarnings title={item.title} status={item.status} warnings={item.warnings} /></Box>)}
         {result?.warnings.map((warning, index) => <Text key={`import-warning:${index}`} color="yellow">Warning: {warning}</Text>)}
         {syncResult ? <Text>Sync backup: {syncResult.backup ?? "not needed"}</Text> : null}
         {syncResult?.results.map((item) => <Box key={`sync:${item.sourceKey}`} flexDirection="column"><Text>{item.status === "synced" ? "✓" : "•"} {item.title} — {item.status}, {item.turnsAdded} added, {item.turnsAdopted} adopted, {item.events} events</Text><OperationItemWarnings title={item.title} status={item.status} warnings={item.warnings} /></Box>)}

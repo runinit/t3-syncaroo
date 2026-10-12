@@ -7,6 +7,7 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { conversationStatusText, escapeDestination, helpTextForScreen, ImportTui, OperationItemWarnings, operationNextAction, replacementStatusText, ReplacementReview, resultHeading, selectionMarker, StartT3Prompt } from "../src/tui.js";
 import type { ConversationReplacePreview, ConversationSyncPreview, TargetPaths } from "../src/core/types.js";
+import { summarizeOutcomeCounts } from "../src/core/outcomes.js";
 import { canonicalConversation } from "./helpers.js";
 
 const paths: TargetPaths = {
@@ -78,6 +79,22 @@ describe("interactive TUI", () => {
     expect(frame).toContain("Existing task");
     expect(frame).toContain("different task for this source session");
     expect(frame).toContain("Keep the existing T3 task");
+    tui.unmount();
+  });
+
+  it("counts built-in adoption separately and renders it as successful", () => {
+    const counts = summarizeOutcomeCounts([
+      { status: "adopted" },
+      { status: "already-imported" },
+      { status: "conflict" },
+    ], [], []);
+    expect(counts).toMatchObject({ adopted: 1, alreadyImported: 1, conflict: 1, failed: 0, classified: 3 });
+    const tui = render(<OperationItemWarnings title="Existing T3 task" status="adopted" warnings={[]} />);
+    const frame = tui.lastFrame() ?? "";
+    expect(frame).toContain("Adopted the existing T3 task after verifying its history");
+    expect(frame).toContain("Future import retries will report");
+    expect(frame).toContain("already-imported");
+    expect(frame).not.toContain("Next:");
     tui.unmount();
   });
 

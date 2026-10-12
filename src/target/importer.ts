@@ -16,22 +16,25 @@ import {
 import { basename, extname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import type {
-  CanonicalActivity,
-  CanonicalMessage,
-  CanonicalThread,
-  ImportItemResult,
-  ImportRunResult,
-  ImportSelection,
-  TargetPaths,
+import {
+  type CanonicalActivity,
+  type CanonicalMessage,
+  type CanonicalThread,
+  type ImportItemResult,
+  type ImportRunResult,
+  type ImportSelection,
+  type TargetPaths,
 } from "../core/types.js";
 import { canonicalPath, deterministicUuid, sha256, truncate } from "../core/util.js";
-import { checkpointForThread } from "../core/checkpoint.js";
+import { checkpointForThread, type NativeProjectionIdentityV1 } from "../core/checkpoint.js";
 import { safetyError, writeError } from "../core/errors.js";
 import { resolveProviderSelection, type TargetOverrides } from "./config.js";
 import { assertT3Closed, validateTargetDatabase } from "./schema.js";
-import { listImports, recordImports, type LedgerRecord } from "./ledger.js";
-import { encodeCanonicalHistory, projectedHistoryMatches, type V2HistoryAsset } from "./v2/history.js";
+import { listImports, listImportsForTargets, recordImports, type LedgerRecord, type StoredLedgerRecord } from "./ledger.js";
+import { captureNativeProjectionIdentity, encodeCanonicalHistory, projectedHistoryMatches, type V2HistoryAsset } from "./v2/history.js";
+import { verifyUpgradedPrefix } from "./v2/upgraded-binding.js";
+import { verifyOrRecoverV2Assets } from "./v2/assets.js";
+import { builtinHeadAttachmentEventId, matchBuiltinImport, type BuiltinImportProjection } from "./v2/adoption.js";
 
 const EVENT_TYPES = [
   "project.created",
@@ -443,15 +446,24 @@ function aggregateStatus(results: ImportItemResult[], dryRun: boolean): ImportRu
 export interface V2ThreadReply {
   threadId: string;
   exists: boolean;
-  thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string; activeProviderThreadId?: string } | null;
-  events?: Array<{ id: string; sequence: number }>;
+  thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string; activeProviderThreadId?: string | null } | null;
+  events?: Array<{ id: string; sequence: number; type?: string; threadId?: string; aggregateKind?: string; aggregateId?: string; occurredAt?: string; driver?: string; providerInstanceId?: string; payload?: Record<string, unknown> }>;
+  selectedEventDetails?: Array<{ id: string; sequence: number; event: { id: string; type: string; threadId?: string; driver?: string; providerInstanceId?: string; occurredAt?: string; payload?: Record<string, unknown> } }>;
   records?: {
-    thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string; activeProviderThreadId?: string };
+    thread?: { id?: string; projectId?: string; historyOrigin?: string; providerInstanceId?: string; activeProviderThreadId?: string | null };
     messages?: Array<{ id: string; threadId?: string; role: string; text: string; attachments?: Array<Record<string, unknown>>; createdAt?: string }>;
     turnItems?: Array<Record<string, unknown>>;
     plans?: Array<Record<string, unknown>>;
     providerTurns?: Array<Record<string, unknown>>;
     providerThreads?: Array<{ id: string; appThreadId?: string; driver?: string; providerInstanceId?: string; nativeThreadRef?: { driver?: string; nativeId?: string; strength?: string } | null; nativeConversationHeadRef?: { driver?: string; nativeId?: string; strength?: string } | null }>;
+  };
+  recoveryRecords?: {
+    runs?: Array<Record<string, unknown>>;
+    attempts?: Array<Record<string, unknown>>;
+    nodes?: Array<Record<string, unknown>>;
+    checkpoints?: Array<Record<string, unknown>>;
+    checkpointScopes?: Array<Record<string, unknown>>;
+    contextHandoffs?: Array<Record<string, unknown>>;
   };
   snapshot?: { projection?: { thread?: Record<string, unknown> } };
 }
@@ -465,7 +477,7 @@ export interface V2NativeReply {
   projectionMetadata?: { schemaVersion: number; lastSequence: number } | null;
   threads?: V2ThreadReply[];
   projects?: Array<{ id?: string; projectId?: string; workspaceRoot?: string; deletedAt?: string | null; [key: string]: unknown }>;
-  outcome?: "written" | "already-present" | "write-failed" | "replaced" | "already-replaced" | "replace-conflict" | "readback-conflict" | "attached" | "already-attached" | "attach-conflict";
+  outcome?: "written" | "already-present" | "write-failed" | "appended" | "replaced" | "already-replaced" | "replace-conflict" | "readback-conflict" | "attached" | "already-attached" | "attach-conflict";
   reason?: string;
   replacementThreadId?: string;
   storedSequences?: Array<{ eventId: string; threadId: string; sequence: number }>;
@@ -677,22 +689,53 @@ function v2LedgerRecord(plan: V2Plan, paths: TargetPaths, firstSequence: number,
   };
 }
 
-function verifyOrRecoverV2Assets(plan: V2Plan, paths: TargetPaths, allowMissingRecovery: boolean): void {
-  const missing: V2HistoryAsset[] = [];
-  for (const asset of plan.assets) {
-    const expected = asset.data ?? (asset.sourcePath && existsSync(asset.sourcePath) ? readFileSync(asset.sourcePath) : undefined);
-    if (!expected) throw safetyError(`The source bytes for ${asset.descriptor.name} are unavailable, so T3 image history cannot be verified. Restore the source attachment before retrying.`);
-    if (!existsSync(asset.finalPath)) {
-      missing.push(asset);
-      continue;
-    }
-    const current = readFileSync(asset.finalPath);
-    if (!current.equals(expected)) throw safetyError(`The existing T3 image for ${asset.descriptor.name} does not match the source session. Preserve it and resolve the attachment conflict before retrying.`);
+function knownUpgradeTargetIds(paths: TargetPaths): { currentTargetId: string; targetIds: string[] } {
+  const currentTargetId = sha256(canonicalPath(paths.dbPath));
+  const targetIds = [currentTargetId];
+  if (basename(paths.dbPath) === "statev2.sqlite") {
+    targetIds.push(sha256(canonicalPath(join(paths.stateDir, "state.sqlite"))));
   }
-  if (missing.length === 0) return;
-  if (!allowMissingRecovery) throw safetyError("T3 has imported image references but the attachment bytes are missing and no matching import checkpoint proves their contents. Restore the verified backup or resolve the attachment conflict before retrying.");
-  const staged = materializeAssets([{ assets: missing }], paths, randomUUID());
-  staged.cleanup();
+  return { currentTargetId, targetIds: [...new Set(targetIds)] };
+}
+
+function upgradeMappingForSource(rows: StoredLedgerRecord[], thread: CanonicalThread): { record?: StoredLedgerRecord; conflict?: string } {
+  const active = rows.filter((row) => row.sourceSessionId === thread.sourceSessionId && row.isCanonical !== false && !row.supersededByThreadId);
+  if (!active.length) return {};
+  const direct = active.filter((row) => row.sourceKey === thread.sourceKey || row.currentSourceKey === thread.sourceKey);
+  const selected = direct.length ? direct : active;
+  const signatures = new Set(active.map((row) => JSON.stringify({
+    source: row.source, sourceSessionId: row.sourceSessionId, sourceKey: row.sourceKey,
+    currentSourceKey: row.currentSourceKey, threadId: row.threadId, projectId: row.projectId,
+    identitySeed: row.identitySeed, checkpoint: row.checkpoint ?? null,
+    resumable: row.resumable, sourceLeafId: row.sourceLeafId ?? null,
+    nativeConversationHeadId: row.nativeConversationHeadId ?? null,
+  })));
+  if (signatures.size > 1) return { conflict: "More than one active importer mapping exists for this source session. Choose its canonical T3 task before importing." };
+  const record = selected[0]!;
+  if (record.source !== thread.source) return { conflict: "The saved importer mapping belongs to a different provider. Resolve it before importing." };
+  if (thread.source === "codex" && record.sourceKey !== thread.sourceKey && record.currentSourceKey !== thread.sourceKey) {
+    return { conflict: "The Codex source identity no longer matches its saved import mapping. Resolve it before importing." };
+  }
+  return { record };
+}
+
+function nativeProjectionPrefix(records: V2ThreadReply["records"], prefixPlan: V2Plan): NativeProjectionIdentityV1 | undefined {
+  if (!records?.messages || !records.turnItems || !records.plans) return undefined;
+  return captureNativeProjectionIdentity({
+    messages: records.messages.slice(0, prefixPlan.events.filter((event) => event.type === "message.updated").length),
+    turnItems: records.turnItems.slice(0, prefixPlan.events.filter((event) => event.type === "turn-item.updated").length),
+    plans: records.plans.slice(0, prefixPlan.events.filter((event) => event.type === "plan.updated").length),
+  });
+}
+
+function refreshUpgradeSourceCursor(record: StoredLedgerRecord, plan: V2Plan): StoredLedgerRecord {
+  const { sourceLeafId: _oldLeaf, nativeConversationHeadId: _oldHead, ...retained } = record;
+  const head = plan.thread.resumeCursor?.resumeSessionAt;
+  return {
+    ...retained,
+    ...(plan.thread.leafId ? { sourceLeafId: plan.thread.leafId } : {}),
+    ...(plan.resumable && plan.thread.source === "claude" && typeof head === "string" ? { nativeConversationHeadId: head } : {}),
+  };
 }
 
 async function importNightlyV2(
@@ -702,6 +745,16 @@ async function importNightlyV2(
 ): Promise<ImportRunResult> {
   const db = new Database(paths.dbPath, { readonly: true, fileMustExist: true });
   let plans: V2Plan[] = [];
+  const { currentTargetId, targetIds: upgradeTargetIds } = knownUpgradeTargetIds(paths);
+  let upgradeLedgerRows: StoredLedgerRecord[] = [];
+  let ledgerLookupError: string | undefined;
+  if (!options.dryRun) {
+    try { upgradeLedgerRows = listImportsForTargets(upgradeTargetIds); }
+    catch (error) { ledgerLookupError = error instanceof Error ? error.message : String(error); }
+  }
+  const upgradeMappings = new Map<V2Plan, StoredLedgerRecord>();
+  const mappingConflicts = new Map<V2Plan, string>();
+  const selectionsByPlan = new Map<V2Plan, ImportSelection>();
   try {
     const projectIds = new Map<string, string>();
     for (const selection of selections) {
@@ -712,7 +765,19 @@ async function importNightlyV2(
         const projectedProject = knownProject ?? existingProjectId(db, thread.workspace);
         const projectId = projectedProject ?? deterministicUuid(`t3-import:project:${workspaceKey}`);
         projectIds.set(workspaceKey, projectId);
-        plans.push(planV2Thread(selection, thread, paths, projectId, !projectedProject, options.providerInstance));
+        const lookup = ledgerLookupError
+          ? { conflict: `The external import mapping could not be checked (${ledgerLookupError}). Preserve the existing task and repair the ledger before continuing.` }
+          : options.dryRun ? {} : upgradeMappingForSource(upgradeLedgerRows, thread);
+        const mapping = lookup.record;
+        const plan = planV2Thread(selection, thread, paths, projectId, !projectedProject, options.providerInstance,
+          mapping ? { threadId: mapping.threadId, identitySeed: mapping.identitySeed, disableResume: !mapping.resumable } : {});
+        plans.push(plan);
+        selectionsByPlan.set(plan, selection);
+        if (mapping) {
+          upgradeMappings.set(plan, mapping);
+          if (mapping.projectId !== projectId) mappingConflicts.set(plan, "The saved import mapping points to a different T3 project. Preserve the task and resolve project ownership before continuing.");
+        }
+        if (lookup.conflict) mappingConflicts.set(plan, lookup.conflict);
       }
     }
   } finally {
@@ -725,8 +790,15 @@ async function importNightlyV2(
 
   const inspection = await callV2Native(paths, {
     op: "inspect",
-    threadIds: plans.map((plan) => plan.threadId),
+    threadIds: [...new Set(plans.flatMap((plan) => [plan.threadId, `import:${plan.provider.instanceId}:${plan.thread.sourceSessionId}`]))],
     projectIds: [...new Set(plans.map((plan) => plan.projectId))],
+    selectedEventIds: [...new Set(plans.flatMap((plan) => {
+      const head = plan.thread.source === "claude" ? plan.thread.resumeCursor?.resumeSessionAt : undefined;
+      return typeof head === "string" && head.length > 0
+        ? [builtinHeadAttachmentEventId(plan.provider.instanceId, plan.thread.sourceSessionId, plan.thread.sourceKey, head)]
+        : [];
+    }))],
+    includeRecoveryRecords: true,
   });
   if (inspection.integrity !== "ok" || inspection.profile?.isV2Schema !== true || inspection.profile.requiredTablesPresent !== true) {
     throw safetyError("The pinned native reader could not confirm this as an intact T3 v2 database. No changes were made.");
@@ -741,47 +813,165 @@ async function importNightlyV2(
       throw safetyError(`T3 project ${plan.projectId} does not match the source workspace for ${plan.thread.sourceSessionId}.`);
     }
   }
-  const inspectedById = new Map((inspection.threads ?? []).map((thread) => [thread.threadId, thread]));
+  const inspectedById = new Map((inspection.threads ?? []).map((thread) => [thread.threadId, {
+    ...thread,
+    ...(thread.selectedEventDetails?.length ? {
+      events: [
+        ...(thread.events ?? []).filter((event) => !thread.selectedEventDetails!.some((detail) => detail.id === event.id)),
+        ...thread.selectedEventDetails.map(({ event, sequence }) => ({ ...event, sequence })),
+      ],
+    } : {}),
+  }]));
   const existing = new Set<string>();
   const recoveryWarnings: string[] = [];
+  const conflictsByPlan = new Map<V2Plan, string>();
+  const upgradePrefixPlans = new Map<V2Plan, V2Plan>();
+  const upgradeSnapshots = new Map<V2Plan, Record<string, unknown>>();
+  const attachPlans = new Set<V2Plan>();
+  const builtinHeadEvents = new Map<V2Plan, Record<string, unknown>>();
+  const builtinMatched = new Set<V2Plan>();
+  const ledgerRecoveryPlans = new Set<V2Plan>();
   for (const plan of plans) {
-    const prior = inspectedById.get(plan.threadId);
-    if (prior?.exists) {
-      if (!v2HistoryMatches(prior, plan) || !v2EventOwnershipMatches(prior, plan)) {
-        throw safetyError(`T3 already has a different task for ${plan.thread.source} session ${plan.thread.sourceSessionId}. Keep the existing task and resolve the history conflict before importing.`);
+    let prior = inspectedById.get(plan.threadId);
+    const mapping = upgradeMappings.get(plan);
+    const mappedConflict = mappingConflicts.get(plan);
+    if (!prior?.exists && !mappedConflict) {
+      const builtinThreadId = `import:${plan.provider.instanceId}:${plan.thread.sourceSessionId}`;
+      const builtinTarget = inspectedById.get(builtinThreadId);
+      if (builtinTarget?.exists) {
+        const selection = selectionsByPlan.get(plan)!;
+        const match = matchBuiltinImport({
+          thread: plan.thread,
+          sourceCandidates: selection.conversation.threads,
+          providerInstanceId: plan.provider.instanceId,
+          project: { id: plan.projectId, workspaceRoot: plan.thread.workspace },
+          target: builtinTarget as BuiltinImportProjection,
+          attachmentsDir: paths.attachmentsDir,
+        });
+        if (match.status === "conflict") {
+          conflictsByPlan.set(plan, `${match.reason} Preserve the task and resolve the source or history conflict before importing.`);
+          continue;
+        }
+        plan.threadId = match.threadId;
+        prior = builtinTarget;
+        inspectedById.set(match.threadId, builtinTarget);
+        builtinMatched.add(plan);
+        if (match.providerConversationHeadEvent) builtinHeadEvents.set(plan, match.providerConversationHeadEvent);
       }
+    }
+    if (!prior?.exists) {
+      if (mapping || mappedConflict) conflictsByPlan.set(plan, mappedConflict ?? "The saved mapping points to a T3 task that is missing. Restore it or resolve the mapping before importing.");
+      continue;
+    }
+    if (mappedConflict) {
+      conflictsByPlan.set(plan, mappedConflict);
+      continue;
+    }
+    const exactNativeImport = v2HistoryMatches(prior, plan) && v2EventOwnershipMatches(prior, plan);
+    if (exactNativeImport) {
       existing.add(plan.threadId);
       if (!options.dryRun) {
-        const targetId = sha256(canonicalPath(paths.dbPath));
-        let ledgerRows;
-        try { ledgerRows = listImports(targetId, plan.thread.source); }
+        let currentRows: StoredLedgerRecord[];
+        try { currentRows = listImports(currentTargetId, plan.thread.source); }
         catch (error) {
-          throw writeError(`T3 already contains the exact imported history for ${plan.thread.source} session ${plan.thread.sourceSessionId}, but its external ledger could not be checked: ${error instanceof Error ? error.message : String(error)}. No native events were replayed.`, error);
+          conflictsByPlan.set(plan, `The external import mapping could not be checked (${error instanceof Error ? error.message : String(error)}). No native events were replayed.`);
+          continue;
         }
-        const mapped = ledgerRows.find((row) => row.sourceKey === plan.thread.sourceKey && row.threadId === plan.threadId);
-        if (mapped && mapped.sourceFingerprint !== plan.fingerprint) {
-          throw safetyError(`T3 already has this imported task, but its source session has changed since import. Use sync or resolve the history conflict before retrying.`);
+        const currentMapping = currentRows.find((row) => row.sourceKey === plan.thread.sourceKey && row.threadId === plan.threadId);
+        if (currentMapping && currentMapping.sourceFingerprint !== plan.fingerprint) {
+          conflictsByPlan.set(plan, "This T3 task is already imported, but its source changed. Use sync or resolve the history conflict before retrying.");
+          existing.delete(plan.threadId);
+          continue;
         }
-        verifyOrRecoverV2Assets(plan, paths, Boolean(mapped));
-        if (!mapped) {
-          const sequences = prior.events!.map((event) => event.sequence);
-          const warning = "Recovered the external import ledger from exact native event ownership; the original backup path was not retained.";
-          try {
-            recordImports([v2LedgerRecord(plan, paths, Math.min(...sequences), Math.max(...sequences), "", [warning])]);
-            recoveryWarnings.push(warning);
-          } catch (error) {
-            throw writeError(`T3 already contains the exact imported history for ${plan.thread.source} session ${plan.thread.sourceSessionId}, but its external ledger could not be recovered: ${error instanceof Error ? error.message : String(error)}. No native events were replayed.`, error);
+        verifyOrRecoverV2Assets(plan, paths, Boolean(currentMapping || mapping), materializeAssets);
+        if (!currentMapping) {
+          const warning = mapping
+            ? "Restored the current-target mapping from the verified pre-upgrade ledger; its original backup is retained."
+            : "Recovered the external import mapping from exact native event ownership; the original backup path is unknown.";
+          const nativeSequences = prior.events?.map((event) => event.sequence) ?? [];
+          const validNativeSequences = nativeSequences.filter((value) => Number.isSafeInteger(value) && value > 0);
+          const firstSequence = validNativeSequences.length ? Math.min(...validNativeSequences) : 0;
+          const lastSequence = validNativeSequences.length ? Math.max(...validNativeSequences) : 0;
+          const restored: LedgerRecord = mapping ? {
+            ...mapping, targetId: currentTargetId, sourceFingerprint: plan.fingerprint,
+            currentSourceKey: plan.thread.sourceKey, warnings: [...mapping.warnings, warning],
+            firstSequence, lastSequence,
+            checkpoint: mapping.checkpoint ?? checkpointForThread(plan.thread),
+            isCanonical: mapping.isCanonical ?? true,
+          } : v2LedgerRecord(plan, paths, firstSequence, lastSequence, "", [warning]);
+          try { recordImports([restored]); recoveryWarnings.push(warning); }
+          catch (error) {
+            conflictsByPlan.set(plan, `T3 already contains this task, but its current-target mapping could not be recovered (${error instanceof Error ? error.message : String(error)}). No native events were replayed.`);
+            existing.delete(plan.threadId);
           }
         }
       }
+      continue;
     }
+
+    const nativeThread = prior.records?.thread ?? prior.thread;
+    if (nativeThread?.id !== plan.threadId || nativeThread.projectId !== plan.projectId
+      || nativeThread.historyOrigin !== "v1_import" || nativeThread.providerInstanceId !== plan.provider.instanceId) {
+      conflictsByPlan.set(plan, "The existing T3 task has changed project/provider ownership or is not a converted import. Preserve it and resolve the conflict before importing.");
+      continue;
+    }
+    const mappingSourceConflict = mapping && (mapping.source !== plan.thread.source
+      || mapping.sourceSessionId !== plan.thread.sourceSessionId || mapping.threadId !== plan.threadId
+      || mapping.projectId !== plan.projectId || !mapping.identitySeed);
+    if (mappingSourceConflict) {
+      conflictsByPlan.set(plan, "The saved pre-upgrade mapping does not match this source session, project, or converted thread. Preserve it and resolve the conflict before importing.");
+      continue;
+    }
+    const selection = selectionsByPlan.get(plan)!;
+    const proof = verifyUpgradedPrefix({
+      sourceThread: plan.thread,
+      target: prior,
+      expected: {
+        threadId: plan.threadId,
+        projectId: plan.projectId,
+        providerInstanceId: plan.provider.instanceId,
+        sourceSessionId: plan.thread.sourceSessionId,
+        nativeThreadId: String(plan.thread.resumeCursor?.threadId ?? plan.thread.sourceSessionId),
+        sourceFingerprint: mapping?.sourceFingerprint ?? plan.fingerprint,
+        currentFingerprint: plan.fingerprint,
+        identitySeed: plan.identitySeed,
+        ...(mapping?.checkpoint ? { checkpoint: mapping.checkpoint } : {}),
+        ...(mapping?.nativeConversationHeadId ? { nativeConversationHeadId: mapping.nativeConversationHeadId } : {}),
+        ...(builtinMatched.has(plan) && plan.thread.source === "claude" && plan.resumable && !builtinHeadEvents.has(plan)
+          && typeof plan.thread.resumeCursor?.resumeSessionAt === "string"
+          ? { nativeConversationHeadId: plan.thread.resumeCursor.resumeSessionAt } : {}),
+        ...(builtinHeadEvents.has(plan) ? { allowNullClaudeHead: true } : {}),
+        resumable: mapping?.resumable ?? plan.resumable,
+      },
+      planPrefix: (prefixThread) => planV2Thread({ conversation: { ...selection.conversation, threads: [prefixThread] }, resume: false },
+        prefixThread, paths, plan.projectId, false, plan.provider.instanceId,
+        { threadId: plan.threadId, identitySeed: plan.identitySeed, disableResume: true }),
+    });
+    if (proof.status === "conflict") {
+      conflictsByPlan.set(plan, `${proof.reason} Preserve it and resolve the conflict before continuing.`);
+      continue;
+    }
+    const prefixPlan = proof.prefixPlan;
+    if (!options.dryRun) {
+      try { verifyOrRecoverV2Assets(prefixPlan, paths, true, materializeAssets); }
+      catch (error) {
+        conflictsByPlan.set(plan, `The converted task's source attachments could not be verified or restored (${error instanceof Error ? error.message : String(error)}). Preserve it and resolve the attachment conflict before continuing.`);
+        continue;
+      }
+    }
+    existing.add(plan.threadId);
+    upgradePrefixPlans.set(plan, prefixPlan);
+    upgradeSnapshots.set(plan, proof.expectedSnapshot);
+    if (proof.binding === "absent" || proof.binding === "needs-head") attachPlans.add(plan);
+    else if (!options.dryRun) ledgerRecoveryPlans.add(plan);
   }
 
   const results: ImportItemResult[] = plans.map((plan) => ({
     source: plan.thread.source,
     sourceId: plan.thread.sourceSessionId,
     sourceKey: plan.thread.sourceKey,
-    status: existing.has(plan.threadId) ? "already-imported" : options.dryRun ? "dry-run" : "imported",
+    status: conflictsByPlan.has(plan) ? "conflict" : builtinMatched.has(plan) && !options.dryRun ? "adopted"
+      : existing.has(plan.threadId) ? "already-imported" : options.dryRun ? "dry-run" : "imported",
     threadId: plan.threadId,
     projectId: plan.projectId,
     title: plan.thread.title,
@@ -791,17 +981,19 @@ async function importNightlyV2(
     events: plan.events.length,
     attachments: plan.attachments,
     resumable: plan.resumable,
-    warnings: [...plan.thread.warnings, ...plan.warnings, ...(plan.provider.warning ? [plan.provider.warning] : []), ...(existing.has(plan.threadId) && recoveryWarnings.length ? ["An external import ledger mapping was recovered for this T3 history."] : [])],
+    warnings: [...plan.thread.warnings, ...plan.warnings, ...(plan.provider.warning ? [plan.provider.warning] : []), ...(conflictsByPlan.get(plan) ? [conflictsByPlan.get(plan)!] : []), ...(existing.has(plan.threadId) && recoveryWarnings.length ? ["An external import mapping was recovered for this T3 history."] : [])],
   }));
-  const pending = plans.filter((plan) => !existing.has(plan.threadId));
-  if (options.dryRun || pending.length === 0) {
+  const pending = plans.filter((plan) => !existing.has(plan.threadId) && !conflictsByPlan.has(plan));
+  if (options.dryRun || (pending.length === 0 && attachPlans.size === 0 && ledgerRecoveryPlans.size === 0)) {
     return { schemaVersion: 1, status: aggregateStatus(results, options.dryRun), target: paths.dbPath, migration: 61, backup: null, results, warnings: recoveryWarnings };
   }
 
-  const backupDb = new Database(paths.dbPath, { fileMustExist: true });
-  let backup: string;
-  try { backup = createBackup(backupDb, paths); }
-  finally { backupDb.close(); }
+  let backup: string | null = null;
+  if (pending.length > 0 || attachPlans.size > 0) {
+    const backupDb = new Database(paths.dbPath, { fileMustExist: true });
+    try { backup = createBackup(backupDb, paths); }
+    finally { backupDb.close(); }
+  }
 
   const warnings: string[] = [];
   for (const plan of pending) {
@@ -821,7 +1013,7 @@ async function importNightlyV2(
         // If the helper cannot confirm rollback, retain bytes so a possibly
         // committed native history cannot be left pointing at missing images.
       }
-      throw writeError(`${error instanceof Error ? error.message : String(error)} The verified backup is ${backup}.`, error);
+      throw writeError(`${error instanceof Error ? error.message : String(error)} The verified backup is ${backup ?? "unavailable"}.`, error);
     }
     assets.cleanup();
     const result = results.find((item) => item.threadId === plan.threadId)!;
@@ -833,12 +1025,143 @@ async function importNightlyV2(
       ...(projection.records ? { records: projection.records } : {}),
     } : undefined;
     if (!sequenceRange || !readback || !v2HistoryMatches(readback, plan)) {
-      throw writeError(`T3 v2 did not return committed event sequences for ${plan.thread.sourceSessionId}. The verified backup is ${backup}.`);
+      throw writeError(`T3 v2 did not return committed event sequences for ${plan.thread.sourceSessionId}. The verified backup is ${backup ?? "unavailable"}.`);
     }
     result.sequence = { first: sequenceRange.first, last: sequenceRange.last };
-    const record = v2LedgerRecord(plan, paths, sequenceRange.first, sequenceRange.last, backup, result.warnings);
+    const record = v2LedgerRecord(plan, paths, sequenceRange.first, sequenceRange.last, backup!, result.warnings);
     try { recordImports([record]); }
     catch (error) { warnings.push(`Import succeeded, but the external ledger could not be updated: ${error instanceof Error ? error.message : String(error)}`); }
+  }
+
+  for (const plan of attachPlans) {
+    const prior = inspectedById.get(plan.threadId)!;
+    const prefixPlan = upgradePrefixPlans.get(plan)!;
+    const expectedSnapshot = upgradeSnapshots.get(plan);
+    const providerEvent = builtinHeadEvents.get(plan) ?? plan.events.find((event) => event.type === "provider-thread.updated");
+    if (!expectedSnapshot || !providerEvent) {
+      const result = results.find((item) => item.threadId === plan.threadId)!;
+      result.status = "conflict";
+      result.warnings.push("The converted task did not expose the complete native snapshot needed for safe provider binding.");
+      continue;
+    }
+    let attached: V2NativeReply;
+    const needsHeadOnly = builtinHeadEvents.has(plan) && Boolean(prior.records?.providerThreads?.length);
+    try {
+      if (needsHeadOnly) {
+        const payload = providerEvent.payload as Record<string, any>;
+        const binding = prior.records?.providerThreads?.find((entry) => entry.id === payload.id);
+        attached = await callV2Native(paths, {
+          op: "append", threadId: plan.threadId, projectId: plan.projectId,
+          providerInstanceId: plan.provider.instanceId, providerThreadId: payload.id,
+          driver: plan.provider.providerName, nativeThreadRef: binding?.nativeThreadRef,
+          expectedConversationHeadRef: null, events: [providerEvent],
+        });
+      } else {
+        attached = await callV2Native(paths, {
+          op: "attach-upgraded-binding",
+          threadId: plan.threadId,
+          projectId: plan.projectId,
+          providerInstanceId: plan.provider.instanceId,
+          expectedSnapshot,
+          event: providerEvent,
+        });
+      }
+    } catch (error) {
+      const result = results.find((item) => item.threadId === plan.threadId)!;
+      result.status = "conflict";
+      result.warnings.push(`The converted task could not be safely attached to its source provider (${error instanceof Error ? error.message : String(error)}).`);
+      continue;
+    }
+    if (!attached.ok || (needsHeadOnly
+      ? attached.outcome !== "appended"
+      : attached.outcome !== "attached" && attached.outcome !== "already-attached")) {
+      const result = results.find((item) => item.threadId === plan.threadId)!;
+      result.status = "conflict";
+      result.warnings.push(`The converted task binding changed during recovery (${attached.reason ?? attached.error ?? "native attach conflict"}).`);
+      continue;
+    }
+    const result = results.find((item) => item.threadId === plan.threadId)!;
+    result.resumable = plan.resumable;
+    const sequence = attached.storedSequences?.find((entry) => entry.eventId === providerEvent.id)?.sequence
+      ?? attached.storedSequenceRange?.last;
+    if (sequence !== undefined) result.sequence = { first: sequence, last: sequence };
+    const currentMapping = upgradeMappings.get(plan);
+    const priorSequences = prior.events?.map((event) => event.sequence).filter(Number.isSafeInteger) ?? [];
+    const firstSequence = priorSequences.length ? Math.min(...priorSequences) : sequence ?? 0;
+    const lastSequence = sequence ?? (priorSequences.length ? Math.max(...priorSequences) : 0);
+    const warning = currentMapping?.targetId !== currentTargetId
+      ? "Restored the current-target mapping from the verified pre-upgrade ledger; its original backup is retained."
+      : "Recovered the external import mapping from verified converted history; no transcript events were replayed.";
+    const baseRecord = currentMapping
+      ? { ...refreshUpgradeSourceCursor(currentMapping, plan), targetId: currentTargetId, sourceFingerprint: plan.fingerprint,
+          currentSourceKey: plan.thread.sourceKey, warnings: [...currentMapping.warnings, warning],
+          checkpoint: currentMapping.checkpoint ?? checkpointForThread(plan.thread), isCanonical: currentMapping.isCanonical ?? true }
+      : v2LedgerRecord(plan, paths, firstSequence, lastSequence, "", [warning]);
+    const nativeProjection = nativeProjectionPrefix(prior.records, prefixPlan);
+    const record: LedgerRecord = {
+      ...baseRecord,
+      firstSequence,
+      lastSequence,
+      resumable: plan.resumable,
+      checkpoint: {
+        ...checkpointForThread(prefixPlan.thread),
+        ...(nativeProjection ? { nativeProjection } : {}),
+      },
+    };
+    try {
+      recordImports([record]);
+      recoveryWarnings.push(warning);
+    } catch (error) {
+      result.warnings.push(`The native provider binding is usable, but the external mapping could not be recovered (${error instanceof Error ? error.message : String(error)}).`);
+    }
+  }
+  for (const plan of ledgerRecoveryPlans) {
+    const prior = inspectedById.get(plan.threadId)!;
+    const prefixPlan = upgradePrefixPlans.get(plan)!;
+    const mapping = upgradeMappings.get(plan);
+    const priorSequences = prior.events?.map((event) => event.sequence).filter(Number.isSafeInteger) ?? [];
+    const firstSequence = priorSequences.length ? Math.min(...priorSequences) : 0;
+    const lastSequence = priorSequences.length ? Math.max(...priorSequences) : 0;
+    const warning = mapping?.targetId !== currentTargetId
+      ? "Restored the current-target mapping from the verified pre-upgrade ledger; its original backup is retained."
+      : "Recovered the external import mapping from verified converted history; no transcript events were replayed.";
+    const baseRecord = mapping ? {
+      ...refreshUpgradeSourceCursor(mapping, plan),
+      targetId: currentTargetId,
+      sourceFingerprint: plan.fingerprint,
+      currentSourceKey: plan.thread.sourceKey,
+      warnings: [...mapping.warnings, warning],
+      checkpoint: mapping.checkpoint ?? checkpointForThread(prefixPlan.thread),
+      isCanonical: mapping.isCanonical ?? true,
+    } : v2LedgerRecord(plan, paths, firstSequence, lastSequence, "", [warning]);
+    const activeProviderId = (prior.records?.thread ?? prior.thread)?.activeProviderThreadId;
+    const bindings = prior.records?.providerThreads ?? [];
+    const binding = bindings.filter((entry) => entry.appThreadId === plan.threadId && entry.id === activeProviderId).length === 1
+      ? bindings.find((entry) => entry.appThreadId === plan.threadId && entry.id === activeProviderId)
+      : undefined;
+    const actualHead = binding?.nativeConversationHeadRef as Record<string, any> | null | undefined;
+    const { nativeConversationHeadId: _refreshedHead, ...baseWithoutClaimedHead } = baseRecord;
+    const nativeProjection = nativeProjectionPrefix(prior.records, prefixPlan);
+    const record: LedgerRecord = {
+      ...baseWithoutClaimedHead,
+      ...(plan.thread.source === "claude" && plan.resumable && actualHead?.driver === "claudeAgent"
+        && actualHead.strength === "strong" && typeof actualHead.nativeId === "string"
+        ? { nativeConversationHeadId: actualHead.nativeId } : {}),
+      firstSequence,
+      lastSequence,
+      checkpoint: {
+        ...checkpointForThread(prefixPlan.thread),
+        ...(nativeProjection ? { nativeProjection } : {}),
+      },
+    };
+    try {
+      recordImports([record]);
+      recoveryWarnings.push(warning);
+    } catch (error) {
+      const result = results.find((item) => item.threadId === plan.threadId)!;
+      result.status = "conflict";
+      result.warnings.push(`The converted task is usable, but the current-target mapping could not be recovered (${error instanceof Error ? error.message : String(error)}).`);
+    }
   }
   return { schemaVersion: 1, status: aggregateStatus(results, false), target: paths.dbPath, migration: 61, backup, results, warnings };
 }

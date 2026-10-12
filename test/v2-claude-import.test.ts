@@ -143,11 +143,12 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 Claude i
     expect(retry.status).toBe("already-imported");
     expect(eventCount(dbPath)).toBe(eventTotal);
 
-    await expect(importConversations([{ conversation, resume: true }], paths, {
+    const providerConflict = await importConversations([{ conversation, resume: true }], paths, {
       dryRun: false,
       resume: true,
       providerInstance: "claudeAgent-alt",
-    })).rejects.toMatchObject({ exitCode: 4, message: expect.stringContaining("different task") });
+    });
+    expect(providerConflict.results[0]).toMatchObject({ status: "conflict", warnings: expect.arrayContaining([expect.stringContaining("project/provider ownership")]) });
     expect(eventCount(dbPath)).toBe(eventTotal);
   });
 });

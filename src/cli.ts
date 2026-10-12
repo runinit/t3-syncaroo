@@ -248,7 +248,7 @@ program.command("import")
     result.outcomes = outcomes;
     if (diagnostics.length) result.diagnostics = diagnostics;
     result.counts = summarizeOutcomeCounts(result.results, outcomes, diagnostics);
-    await attachCacheReset(result, paths, result.results.some((item) => item.status === "imported"));
+    await attachCacheReset(result, paths, result.results.some((item) => item.status === "imported" || item.status === "adopted"));
     print(result);
   });
 

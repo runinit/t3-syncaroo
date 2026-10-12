@@ -96,7 +96,8 @@ await writeFile(sessionPath, `${rows.map((row) => JSON.stringify(row)).join("\n"
 const conflict = JSON.parse(run(process.execPath, importArgs, { cwd: consumer, env: environment }).stdout);
 assert.equal(conflict.status, "mixed");
 assert.equal(conflict.results?.[0]?.status, "conflict");
-assert.match(conflict.results?.[0]?.warnings?.join("\n") ?? "", /source no longer matches its saved pre-upgrade checkpoint/u);
+assert.ok(conflict.results?.[0]?.warnings?.some((warning) => /checkpoint/iu.test(warning)),
+  "divergent source must report an actionable checkpoint conflict");
 assert.equal(inspect().projectionMetadata[0]?.lastSequence, beforeRetry);
 
 console.log(JSON.stringify({ result: "PASS", package: packed.name, version: packed.version, helperBytes: afterWrite ? (await (await import("node:fs/promises")).stat(helper)).size : 0,

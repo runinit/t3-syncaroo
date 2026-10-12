@@ -128,6 +128,7 @@ export interface SessionOutcomeRecord {
 export interface OperationOutcomeCounts {
   success: number;
   imported: number;
+  adopted: number;
   synced: number;
   replaced: number;
   planned: number;
@@ -174,7 +175,7 @@ export interface ImportItemResult {
   source: SourceName;
   sourceId: string;
   sourceKey: string;
-  status: "imported" | "already-imported" | "dry-run" | "conflict";
+  status: "imported" | "adopted" | "already-imported" | "dry-run" | "conflict";
   threadId: string;
   projectId: string;
   title: string;

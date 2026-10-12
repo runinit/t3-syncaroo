@@ -207,17 +207,22 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 import",
     const selection = { conversation: canonicalConversation(workspace, thread), resume: true };
 
     const options = { dryRun: false, resume: true, providerInstance: "codex-alt" };
-    const first = await importConversations([selection], paths, options);
-    expect(first.status).toBe("imported");
-    expect(first.backup && existsSync(first.backup)).toBe(true);
-    expect(first.warnings.join(" ")).toContain("external ledger could not be updated");
-    const eventTotal = eventCount(dbPath);
-    await expect(importConversations([selection], paths, { dryRun: false, resume: true }))
-      .rejects.toMatchObject({ exitCode: 4, message: expect.stringContaining("different task") });
-    expect(eventCount(dbPath)).toBe(eventTotal);
+    const initialEventCount = eventCount(dbPath);
+    const blocked = await importConversations([selection], paths, options);
+    expect(blocked.status).toBe("mixed");
+    expect(blocked.results[0]).toMatchObject({ status: "conflict", warnings: expect.arrayContaining([expect.stringContaining("external import mapping could not be checked")]) });
+    expect(blocked.backup).toBeNull();
+    expect(eventCount(dbPath)).toBe(initialEventCount);
     const ledgerDir = join(root, "ledger");
     mkdirSync(ledgerDir);
     process.env.T3_IMPORT_DATA_DIR = ledgerDir;
+    const first = await importConversations([selection], paths, options);
+    expect(first.status).toBe("imported");
+    expect(first.backup && existsSync(first.backup)).toBe(true);
+    const eventTotal = eventCount(dbPath);
+    const providerConflict = await importConversations([selection], paths, { dryRun: false, resume: true });
+    expect(providerConflict.results[0]).toMatchObject({ status: "conflict", warnings: expect.arrayContaining([expect.stringContaining("project/provider ownership")] ) });
+    expect(eventCount(dbPath)).toBe(eventTotal);
     const retry = await importConversations([selection], paths, options);
     expect(retry.status).toBe("already-imported");
     expect(eventCount(dbPath)).toBe(eventTotal);
@@ -249,8 +254,8 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 import",
     const divergent = canonicalThread(workspace);
     divergent.turns[0]!.activities = [];
     divergent.turns[0]!.assistant[0]!.text = "Changed history";
-    await expect(importConversations([{ conversation: canonicalConversation(workspace, divergent), resume: true }], paths, { dryRun: false, resume: true }))
-      .rejects.toMatchObject({ exitCode: 4, message: expect.stringContaining("different task") });
+    const divergentResult = await importConversations([{ conversation: canonicalConversation(workspace, divergent), resume: true }], paths, { ...options, dryRun: false, resume: true });
+    expect(divergentResult.results[0]).toMatchObject({ status: "conflict", warnings: expect.arrayContaining([expect.stringContaining("saved converted-task checkpoint")] ) });
     expect(eventCount(dbPath)).toBe(eventTotal);
   });
 
