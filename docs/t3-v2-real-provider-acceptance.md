@@ -151,6 +151,15 @@ does not itself prove t3-import adoption, which remains pending the merged 07
 hook and its runtime retest. The exact server was stopped, and the private log
 and cached access token were sanitized/cleared.
 
+The actual Codex import includes a manual-context handoff and historical
+prelude records that the canonical source projection does not represent. A
+public importer match against that Codex history should therefore be expected
+to reject adoption safely; it is a negative case, not positive adoption
+evidence. Ticket 09 is preparing a frozen pre-handoff Codex fixture for the
+positive case. The actual Claude import projects two user and two assistant
+messages and is a positive candidate once the 07 adoption hook is integrated;
+that hook has not yet been runtime-verified here.
+
 ## Remaining gates
 
 - Retest Codex sync after the manual-context parser fix.
