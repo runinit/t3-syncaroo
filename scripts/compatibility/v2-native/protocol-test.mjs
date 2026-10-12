@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp } from 'node:fs/promises';
 import { join } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { DatabaseSync } from 'node:sqlite';
 
 const [helperPath, fixturePath, nodePath = process.execPath] = process.argv.slice(2);
@@ -150,6 +150,54 @@ const noResumeMismatch = run(nodePath, [helperPath], JSON.stringify(request(noRe
     payload: { ...appendedMessage, id: 'message:v2-protocol:no-resume-mismatch' } }],
 })));
 assert.equal(noResumeMismatch.ok, false); assert.equal(noResumeMismatch.outcome, 'append-conflict');
+
+// Two helpers racing from the same observed head must not both append. A large
+// preflight batch makes the old split read/write scopes overlap reliably; the
+// native writable transaction must serialize the check and sink write.
+const runAsync = (exe, args, input) => new Promise((resolve, reject) => {
+  const child = spawn(exe, args, { env: { ...process.env, NODE_PATH: '' } });
+  let stdout = '';
+  let stderr = '';
+  child.stdout.setEncoding('utf8').on('data', (chunk) => { stdout += chunk; });
+  child.stderr.setEncoding('utf8').on('data', (chunk) => { stderr += chunk; });
+  child.on('error', reject);
+  child.on('close', (status) => {
+    if (status !== 0) return reject(new Error(`${exe} ${args.join(' ')} failed (${status}): ${stderr}`));
+    try { resolve(JSON.parse(stdout.trim().split('\n').at(-1))); } catch (error) { reject(error); }
+  });
+  child.stdin.end(input);
+});
+const racingAppend = (suffix) => {
+  const batch = Array.from({ length: 160 }, (_, index) => {
+    const sequence = String(index + 1).padStart(3, '0');
+    return { id: `t3-import:v2-protocol:race-${suffix}:event-${sequence}`, type: 'message.updated', threadId,
+      providerInstanceId, occurredAt: updatedTime,
+      payload: { ...message, id: `message:v2-protocol:race-${suffix}:${sequence}`, text: `Concurrent append ${suffix}/${sequence}` } };
+  });
+  const desiredHead = { driver: 'codex', nativeId: `source-head:v2-protocol:race-${suffix}`, strength: 'strong' };
+  batch.push({ id: `t3-import:v2-protocol:race-${suffix}:provider-thread`, type: 'provider-thread.updated', threadId,
+    driver: 'codex', providerInstanceId, occurredAt: updatedTime,
+    payload: { ...providerThread, nativeConversationHeadRef: desiredHead, updatedAt: updatedTime } });
+  return appendRequest(batch, { expectedConversationHeadRef: nextHeadRef });
+};
+const raceResults = await Promise.all(['a', 'b'].map((suffix) =>
+  runAsync(nodePath, [helperPath], JSON.stringify(racingAppend(suffix))),
+));
+assert.equal(raceResults.filter((result) => result.ok).length, 1,
+  'only one append may commit from the same expected conversation head');
+assert.equal(raceResults.filter((result) => result.outcome === 'append-conflict').length, 1,
+  `the contending loser must return a structured conflict: ${JSON.stringify(raceResults.map((result) => ({ outcome: result.outcome, reason: result.reason, error: result.error })))}`);
+assert.equal(['database-busy', 'provider-identity-mismatch'].includes(raceResults.find((result) => !result.ok).reason), true,
+  'the loser must either observe the committed head or report a retryable writer conflict');
+const raceWinner = raceResults.find((result) => result.ok);
+const raceState = run(nodePath, [helperPath], JSON.stringify(request(dbPath, 'inspect', { threadIds: [threadId] })));
+assert.equal(raceState.threads[0].events.length, afterAppend.threads[0].events.length + 161,
+  'only the winning append batch may persist');
+assert.match(raceState.threads[0].records.providerThreads[0].nativeConversationHeadRef.nativeId,
+  /^source-head:v2-protocol:race-[ab]$/);
+const raceAEvents = raceState.threads[0].events.filter((event) => event.id.includes(':race-a:')).length;
+assert.equal(raceAEvents === 161 || raceAEvents === 0, true, 'only one complete race batch may persist');
+assert.equal(raceWinner.outcome, 'appended');
 const duplicate = run(nodePath,[helperPath],JSON.stringify(request(dbPath,'write',{projectEvent,events})));
 assert.equal(duplicate.ok,false); assert.equal(duplicate.outcome,'existing-thread-conflict');
 const rollbackDb = join(base,'rollback','statev2.sqlite');
@@ -240,4 +288,4 @@ const nodeVersion = spawnSync(nodePath, ['--version'], { encoding: 'utf8' }).std
 console.log(JSON.stringify({result:'PASS',node:nodeVersion,inspect:true,write:true,append:true,appendIdentityConflicts:true,
   duplicateAppendEventIds:true,appendRollback:true,existingThreadConflict:true,
   threadEnvelopeValidation:true,projectIdentityValidation:true,projectCreateRestriction:true,noResumeAppend:true,
-  tombstonedProjectNotResurrected:true,closeReopen:true,rollback:true,projectCompensation:true}));
+  competingWriterAppend:true,tombstonedProjectNotResurrected:true,closeReopen:true,rollback:true,projectCompensation:true}));

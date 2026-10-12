@@ -248,43 +248,64 @@ async function appendRequest(request: any) {
   const ids = events.map((event: any) => event.id);
   if (new Set(ids).size !== ids.length) return appendConflict('duplicate-event-id', 'append request contains duplicate event IDs');
 
-  const preflight = await run(Effect.gen(function* () {
-    const projections = yield* ProjectionStore.ProjectionStoreV2;
-    const sql = yield* SqlClient.SqlClient;
-    const shell = yield* projections.getThreadShell(threadId);
-    if (!shell || shell.deletedAt != null) return { conflict: 'thread-not-live' as const };
-    if (shell.id !== threadId || shell.projectId !== ProjectId.make(request.projectId)
-      || shell.providerInstanceId !== request.providerInstanceId
-      || shell.activeProviderThreadId !== request.providerThreadId) return { conflict: 'thread-identity-mismatch' as const };
-    const records = yield* projections.getThreadRecords(threadId, ['providerThreads']);
-    const bindings = records.providerThreads.filter((binding: any) => binding.id === request.providerThreadId);
-    if (bindings.length !== 1) return { conflict: 'provider-binding-ambiguous' as const };
-    const binding = bindings[0] as any;
-    if (binding.appThreadId !== threadId || binding.providerInstanceId !== request.providerInstanceId
-      || binding.driver !== request.driver || !sameNativeRef(binding.nativeThreadRef, request.nativeThreadRef)
-      || !sameNativeRef(binding.nativeConversationHeadRef, expectedHead)) return { conflict: 'provider-identity-mismatch' as const };
-    for (const id of ids) {
-      const rows = yield* sql`SELECT event_id FROM orchestration_events WHERE event_id = ${id} LIMIT 1`;
-      if (rows.length) return { conflict: 'event-id-exists' as const };
-    }
-    return { conflict: null, shell };
-  }), makeLayerFor(request.dbPath, true));
-  if (preflight.conflict) return appendConflict(preflight.conflict, `append preflight conflict: ${preflight.conflict}`);
+  let result: any;
+  try {
+    result = await run(Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      return yield* sql.withTransaction(Effect.gen(function* () {
+        const projections = yield* ProjectionStore.ProjectionStoreV2;
+        const shell = yield* projections.getThreadShell(threadId);
+        if (!shell || shell.deletedAt != null) {
+          return appendConflict('thread-not-live', 'append preflight conflict: thread-not-live');
+        }
+        if (shell.id !== threadId || shell.projectId !== ProjectId.make(request.projectId)
+          || shell.providerInstanceId !== request.providerInstanceId
+          || shell.activeProviderThreadId !== request.providerThreadId) {
+          return appendConflict('thread-identity-mismatch', 'append preflight conflict: thread-identity-mismatch');
+        }
+        const records = yield* projections.getThreadRecords(threadId, ['providerThreads']);
+        const bindings = records.providerThreads.filter((binding: any) => binding.id === request.providerThreadId);
+        if (bindings.length !== 1) {
+          return appendConflict('provider-binding-ambiguous', 'append preflight conflict: provider-binding-ambiguous');
+        }
+        const binding = bindings[0] as any;
+        if (binding.appThreadId !== threadId || binding.providerInstanceId !== request.providerInstanceId
+          || binding.driver !== request.driver || !sameNativeRef(binding.nativeThreadRef, request.nativeThreadRef)
+          || !sameNativeRef(binding.nativeConversationHeadRef, expectedHead)) {
+          return appendConflict('provider-identity-mismatch', 'append preflight conflict: provider-identity-mismatch');
+        }
+        for (const id of ids) {
+          const rows = yield* sql`SELECT event_id FROM orchestration_events WHERE event_id = ${id} LIMIT 1`;
+          if (rows.length) return appendConflict('event-id-exists', 'append preflight conflict: event-id-exists');
+        }
 
-  const written = await run(Effect.match(
-    Effect.flatMap(EventSink.EventSinkV2, (sink) => sink.write({ events })),
-    { onFailure: (error) => ({ ok: false as const, outcome: 'write-failed' as const, error: String(error) }),
-      onSuccess: (stored) => ({ ok: true as const, outcome: 'appended' as const,
-        storedSequenceRange: { first: stored[0]?.sequence, last: stored.at(-1)?.sequence } }) },
-  ), makeLayerFor(request.dbPath));
-  if (!written.ok) return { ...written, threadId };
+        // This one-shot layer has no stream subscribers or outbox workers.
+        // EventSink's nested savepoint therefore cannot publish to T3 before
+        // this outer transaction commits. Do not reuse this in a running
+        // T3/server composition, where EventSink notifications are live.
+        const written = yield* Effect.match(
+          Effect.flatMap(EventSink.EventSinkV2, (sink) => sink.write({ events })),
+          { onFailure: (error) => ({ ok: false as const, outcome: 'write-failed' as const, error: String(error) }),
+            onSuccess: (stored) => ({ ok: true as const, outcome: 'appended' as const,
+              storedSequenceRange: { first: stored[0]?.sequence, last: stored.at(-1)?.sequence } }) },
+        );
+        return { ...written, threadId };
+      }));
+    }), makeLayerFor(request.dbPath));
+  } catch (error: any) {
+    if (error?.reason?._tag === 'LockTimeoutError') {
+      return appendConflict('database-busy', 'native database is busy; retry the append after the competing writer finishes');
+    }
+    return appendConflict('append-transaction-failed', `append transaction failed: ${String(error)}`);
+  }
+  if (!result.ok) return result;
   const readback = await run(Effect.gen(function* () {
     const projections = yield* ProjectionStore.ProjectionStoreV2;
     const snapshot = yield* projections.getThreadSnapshot(threadId);
     const records = yield* projections.getThreadRecords(threadId, ['messages', 'turnItems', 'plans', 'providerThreads', 'providerTurns']);
     return { snapshot, records };
   }), makeLayerFor(request.dbPath, true));
-  return { ...written, threadId, projections: [{ threadId, ...readback }] };
+  return { ...result, threadId, projections: [{ threadId, ...readback }] };
 }
 
 async function dispatchRequest(request: any) {

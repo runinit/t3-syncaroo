@@ -66,14 +66,29 @@ update must keep that reference and may advance its conversation head only to
 a strong reference or null; a null source reference cannot gain a conversation
 head during append.
 
-Head and binding checks are read-only preflight before the sink call; they are
-not an atomic compare-and-swap with `EventSinkV2.write`. The application must
-keep T3 closed and hold the importer lock while appending. Once preflight passes,
-the helper writes the whole append batch through the native sink, opens a new
-read-only layer, and returns its stored sequence range and projections. A
-preflight mismatch or event-ID collision returns a structured conflict without
-writing. Sink failures are returned as `write-failed`; the native sink rolls
-back the event batch.
+Head, binding, and event-ID checks run inside the same writable SQLite
+transaction as `EventSinkV2.write`. The pinned client begins that transaction
+with `BEGIN IMMEDIATE`; the native sink uses a nested savepoint on the same
+connection. A competing database writer therefore cannot change the checked
+identity/head between preflight and the append. The application must still keep
+T3 closed and hold the importer lock while appending, because this helper does
+not coordinate with provider activity or the running application's lock. After
+the transaction commits, the helper opens a new read-only layer and returns its
+stored sequence range and projections. A preflight mismatch or event-ID
+collision returns a structured conflict without writing. Sink failures are
+returned as `write-failed`; the native sink rolls back the event batch.
+If SQLite rejects the transaction because a competing writer holds the lock,
+the helper returns an `append-conflict` with reason `database-busy`; the caller
+can retry after the writer finishes.
+
+The outer transaction relies on this helper's one-shot composition: its
+`EventSinkV2.write` has no effects, and the helper constructs no event stream
+subscribers or outbox workers. EventSink's nested call publishes to
+process-local PubSubs before the outer transaction commits, but no service in
+this child subscribes to them and the child exits after returning its response.
+This ordering is safe only for this isolated helper. Do not move the outer
+transaction around `EventSinkV2.write` in a running T3/server composition; there,
+listeners could observe a publication before the outer commit.
 
 An existing thread ID returns `existing-thread-conflict` with the current
 native shell. The helper does not treat an ID match as proof of source/history
@@ -90,8 +105,10 @@ provider-thread binding; verifies exact event ID/sequence ownership and
 existing-thread conflict, then appends a message and matching provider-thread
 head update. It tests project/provider/source/head conflicts, forbidden delete
 events, event-ID collisions, no-resume append with null source references, and
-append rollback under a test-only SQLite projection trigger. It also tests
-project compensation for failed initial writes and verifies deleted-project
+append rollback under a test-only SQLite projection trigger. A competing-writer
+case races two append requests from the same head and requires one append plus
+one structured contention conflict, with no failed or partial batch. It also tests project
+compensation for failed initial writes and verifies deleted-project
 non-resurrection. The trigger is fault injection only; persistence and
 projections use the pinned T3 implementation.
 
