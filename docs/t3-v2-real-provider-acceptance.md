@@ -119,4 +119,3 @@ thread were private to the disposable T3 home.
   checkout is available; its existence does not replace the real provider
   checks recorded above.
 - Isolated desktop inspection remains explicitly deferred by the user.
-
