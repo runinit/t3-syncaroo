@@ -14,6 +14,7 @@ import type {
   DiscoveryOptions,
   SourceAdapter,
   SourceAttachment,
+  SourceDiscoveryResult,
   SourceSummary,
 } from "../core/types.js";
 import { readStableJsonl } from "../core/jsonl.js";
@@ -27,7 +28,7 @@ import {
   type JsonObject,
 } from "../core/util.js";
 import { sourceError } from "../core/errors.js";
-import { walkFiles } from "./files.js";
+import { discoveryOutcome, sourceFileErrorCode, walkFilesWithFailures } from "./files.js";
 import { CodexAppServerSession, type CodexThreadMetadata } from "./codexAppServer.js";
 
 const SYNTHETIC_PREFIXES = ["<recommended_plugins>", "<environment_context>", "<app-context>", "<permissions instructions>"];
@@ -484,7 +485,7 @@ function appTimestamp(value: number | undefined, fallback: string): string {
   return new Date(value < 1_000_000_000_000 ? value * 1_000 : value).toISOString();
 }
 
-async function fastSummaries(options: DiscoveryOptions): Promise<SourceSummary[]> {
+async function fastSummaries(options: DiscoveryOptions): Promise<SourceDiscoveryResult> {
   const indexedTitles = new Map<string, string>();
   const indexedUpdates = new Map<string, string>();
   try {
@@ -499,13 +500,19 @@ async function fastSummaries(options: DiscoveryOptions): Promise<SourceSummary[]
   } catch {
     // Older Codex installations may not have a session index.
   }
-  const files = await walkFiles(join(codexRoot(), "sessions"), ".jsonl");
-  const values = await Promise.all(files.map(async (path): Promise<SourceSummary | undefined> => {
+  const scanRoot = join(codexRoot(), "sessions");
+  const walked = await walkFilesWithFailures(scanRoot, ".jsonl");
+  const outcomes = walked.failures.map((failure) => discoveryOutcome("codex", failure.path, failure.code));
+  const values = await Promise.all(walked.files.map(async (path): Promise<SourceSummary | undefined> => {
     try {
       const fileStat = await stat(path);
       const fallback = fileStat.mtime.toISOString();
       const header = await readRolloutHeader(path, fallback);
-      if (!header || header.child) return undefined;
+      if (!header) {
+        outcomes.push(discoveryOutcome("codex", path, "unsupported-session-format", "unsupported"));
+        return undefined;
+      }
+      if (header.child) return undefined;
       if (options.workspace && canonicalPath(header.workspace) !== canonicalPath(options.workspace)) return undefined;
       const updatedAt = indexedUpdates.get(header.id) ?? fallback;
       if (options.since && new Date(updatedAt) < options.since) return undefined;
@@ -520,11 +527,12 @@ async function fastSummaries(options: DiscoveryOptions): Promise<SourceSummary[]
         status: "complete",
         branches: 1,
       };
-    } catch {
+    } catch (error) {
+      outcomes.push(discoveryOutcome("codex", path, sourceFileErrorCode(error)));
       return undefined;
     }
   }));
-  return values.filter((value): value is SourceSummary => Boolean(value));
+  return { summaries: values.filter((value): value is SourceSummary => Boolean(value)), outcomes };
 }
 
 export class CodexSource implements SourceAdapter {
@@ -550,22 +558,28 @@ export class CodexSource implements SourceAdapter {
   }
 
   async discover(options: DiscoveryOptions): Promise<SourceSummary[]> {
-    const summaries = await fastSummaries(options);
+    return (await this.discoverWithOutcomes(options)).summaries;
+  }
+
+  async discoverWithOutcomes(options: DiscoveryOptions): Promise<SourceDiscoveryResult> {
+    const result = await fastSummaries(options);
     this.metadataWarmup ??= this.session()
       .then((session) => session.list(options.workspace))
       .then((app) => { this.appMetadata = new Map(app.map((entry) => [entry.id, entry])); })
       .catch(() => { this.appMetadata.clear(); })
       .finally(() => { this.metadataWarmup = undefined; });
-    for (const summary of summaries) {
+    for (const summary of result.summaries) {
       const metadata = this.appMetadata.get(summary.id);
       if (metadata?.name) summary.title = metadata.name;
       else if (metadata?.preview) summary.title = deriveTitle(metadata.preview);
       if (metadata?.parentThreadId) summary.parentId = metadata.parentThreadId;
       if (metadata?.updatedAt !== undefined) summary.updatedAt = appTimestamp(metadata.updatedAt, summary.updatedAt);
     }
-    return summaries
+    result.summaries = result.summaries
       .filter((summary) => !summary.parentId)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    result.outcomes.sort((left, right) => left.displayName.localeCompare(right.displayName));
+    return result;
   }
 
   async load(summary: SourceSummary, options: DiscoveryOptions): Promise<CanonicalConversation> {

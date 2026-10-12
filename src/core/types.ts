@@ -93,9 +93,46 @@ export interface DiscoveryOptions {
   includeIncomplete?: boolean;
 }
 
+export type SessionOutcomeKind =
+  | "success"
+  | "already-imported"
+  | "adopted"
+  | "deferred"
+  | "conflict"
+  | "unsupported"
+  | "failed";
+
+export type SessionOutcomePhase = "discovery" | "load" | "preview" | "import" | "sync" | "replace" | "cache";
+
+export interface SessionOutcome {
+  kind: SessionOutcomeKind;
+  phase: SessionOutcomePhase;
+  code: string;
+  message: string;
+  nextAction: string;
+}
+
+export interface SourceDiscoveryOutcome {
+  source: SourceName;
+  /** Present only when the session identifier was parsed from the source. */
+  sessionId?: string;
+  /** Local source locator for finding the affected file or folder. */
+  sourcePath: string;
+  /** Short label for terminal summaries. */
+  displayName: string;
+  outcome: SessionOutcome;
+}
+
+export interface SourceDiscoveryResult {
+  summaries: SourceSummary[];
+  outcomes: SourceDiscoveryOutcome[];
+}
+
 export interface SourceAdapter {
   readonly name: SourceName;
   discover(options: DiscoveryOptions): Promise<SourceSummary[]>;
+  /** Like discover, but preserves per-file scan failures and unsupported files. */
+  discoverWithOutcomes(options: DiscoveryOptions): Promise<SourceDiscoveryResult>;
   load(summary: SourceSummary, options: DiscoveryOptions): Promise<CanonicalConversation>;
   dispose?(): Promise<void>;
 }

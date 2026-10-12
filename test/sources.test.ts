@@ -28,6 +28,67 @@ function jsonl(path: string, rows: unknown[]): void {
 }
 
 describe("source adapters", () => {
+  it("reports an unsupported Codex file while retaining valid discovered sessions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-codex-discovery-outcomes-"));
+    const workspace = join(root, "workspace");
+    const sessions = join(root, "sessions");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(sessions, { recursive: true });
+    process.env.CODEX_HOME = root;
+    process.env.CODEX_BIN = join(root, "missing-codex-executable");
+    const sessionId = "11111111-2222-4333-8444-555555555555";
+    jsonl(join(sessions, "valid.jsonl"), [{ type: "session_meta", payload: { id: sessionId, cwd: workspace, timestamp: "2026-01-01T00:00:00Z" } }]);
+    writeFileSync(join(sessions, "unrecognized.jsonl"), "not a Codex session\n");
+
+    const adapter = new CodexSource();
+    const discovered = await adapter.discoverWithOutcomes({ workspace });
+    expect(discovered.summaries.map((summary) => summary.id)).toEqual([sessionId]);
+    expect(discovered.outcomes).toEqual([expect.objectContaining({
+      source: "codex",
+      sourcePath: join(sessions, "unrecognized.jsonl"),
+      displayName: "unrecognized.jsonl",
+      outcome: expect.objectContaining({ kind: "unsupported", phase: "discovery", code: "unsupported-session-format", nextAction: expect.any(String) }),
+    })]);
+    await adapter.dispose();
+  });
+
+  it("reports an unreadable Claude transcript without dropping valid discovered sessions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-claude-discovery-outcomes-"));
+    const workspace = join(root, "workspace");
+    const project = join(root, "projects", "fixture");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(project, { recursive: true });
+    process.env.CLAUDE_CONFIG_DIR = root;
+    const sessionId = "66666666-6666-4666-8666-666666666666";
+    jsonl(join(project, `${sessionId}.jsonl`), [
+      { sessionId, cwd: workspace, isSidechain: false, uuid: "u1", parentUuid: null, type: "user", timestamp: "2026-01-01T00:00:00Z", message: { content: "hello" } },
+      { sessionId, cwd: workspace, isSidechain: false, uuid: "a1", parentUuid: "u1", type: "assistant", timestamp: "2026-01-01T00:00:01Z", message: { content: [{ type: "text", text: "hi" }], stop_reason: "end_turn" } },
+    ]);
+    writeFileSync(join(project, "unreadable.jsonl"), "{broken json\n");
+
+    const discovered = await new ClaudeSource().discoverWithOutcomes({ workspace });
+    expect(discovered.summaries.map((summary) => summary.id)).toEqual([sessionId]);
+    expect(discovered.outcomes).toEqual([expect.objectContaining({
+      source: "claude",
+      displayName: "unreadable.jsonl",
+      outcome: expect.objectContaining({ kind: "failed", phase: "discovery", code: "source-unreadable", nextAction: expect.any(String) }),
+    })]);
+  });
+
+  it("reports a provider history folder that cannot be traversed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-claude-scan-outcome-"));
+    process.env.CLAUDE_CONFIG_DIR = root;
+    writeFileSync(join(root, "projects"), "not a directory");
+
+    const discovered = await new ClaudeSource().discoverWithOutcomes({});
+    expect(discovered.summaries).toEqual([]);
+    expect(discovered.outcomes).toEqual([expect.objectContaining({
+      source: "claude",
+      displayName: "projects",
+      outcome: expect.objectContaining({ kind: "failed", phase: "discovery", code: "source-scan-failed", nextAction: expect.stringContaining("readable") }),
+    })]);
+  });
+
   it("infers the deepest workspace while canonicalizing each unique path once", async () => {
     const root = await mkdtemp(join(tmpdir(), "t3-import-workspace-inference-"));
     const nested = join(root, "nested");

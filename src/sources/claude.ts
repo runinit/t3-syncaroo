@@ -11,13 +11,14 @@ import type {
   DiscoveryOptions,
   SourceAdapter,
   SourceAttachment,
+  SourceDiscoveryResult,
   SourceSummary,
 } from "../core/types.js";
 import { isTerminalTurn } from "../core/types.js";
 import { readStableJsonl } from "../core/jsonl.js";
 import { canonicalPath, deriveTitle, isObject, isoTimestamp, stringValue, truncate, type JsonObject } from "../core/util.js";
 import { sourceError } from "../core/errors.js";
-import { walkFiles } from "./files.js";
+import { discoveryOutcome, sourceFileErrorCode, walkFilesWithFailures } from "./files.js";
 
 interface ClaudeNode {
   uuid: string;
@@ -548,9 +549,15 @@ export class ClaudeSource implements SourceAdapter {
   readonly name = "claude" as const;
 
   async discover(options: DiscoveryOptions): Promise<SourceSummary[]> {
-    const files = await walkFiles(join(claudeRoot(), "projects"), ".jsonl");
+    return (await this.discoverWithOutcomes(options)).summaries;
+  }
+
+  async discoverWithOutcomes(options: DiscoveryOptions): Promise<SourceDiscoveryResult> {
+    const scanRoot = join(claudeRoot(), "projects");
+    const walked = await walkFilesWithFailures(scanRoot, ".jsonl");
     const summaries: SourceSummary[] = [];
-    for (const path of files) {
+    const outcomes = walked.failures.map((failure) => discoveryOutcome("claude", failure.path, failure.code));
+    for (const path of walked.files) {
       try {
         const fileStat = await stat(path);
         const snapshot = await readStableJsonl(path);
@@ -558,11 +565,13 @@ export class ClaudeSource implements SourceAdapter {
         if (options.workspace && canonicalPath(metadata.workspace) !== canonicalPath(options.workspace)) continue;
         if (options.since && new Date(metadata.updatedAt) < options.since) continue;
         summaries.push({ source: "claude", id: metadata.sessionId, title: metadata.title, workspace: metadata.workspace, path, createdAt: metadata.createdAt, updatedAt: metadata.updatedAt, status: metadata.currentLeaf.type === "assistant" ? "complete" : "incomplete", branches: metadata.leaves.length });
-      } catch {
-        // Ignore malformed/unrelated history during discovery.
+      } catch (error) {
+        outcomes.push(discoveryOutcome("claude", path, sourceFileErrorCode(error)));
       }
     }
-    return summaries.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    summaries.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+    outcomes.sort((left, right) => left.displayName.localeCompare(right.displayName));
+    return { summaries, outcomes };
   }
 
   async load(summary: SourceSummary, options: DiscoveryOptions): Promise<CanonicalConversation> {
