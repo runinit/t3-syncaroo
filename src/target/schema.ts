@@ -152,3 +152,10 @@ export function validateTargetDatabase(db: Database.Database): SchemaInfo {
   const events = db.prepare("SELECT COUNT(*) count, COALESCE(MAX(sequence), 0) maxSequence FROM orchestration_events").get() as { count: number; maxSequence: number };
   return { profile: "legacy", migration: legacyMigration, integrity, eventCount: events.count, maxSequence: events.maxSequence };
 }
+
+/** Validate the selected target without opening it for writes or creating any sidecar state. */
+export function validateTargetReadOnly(dbPath: string): SchemaInfo {
+  const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+  try { return validateTargetDatabase(db); }
+  finally { db.close(); }
+}

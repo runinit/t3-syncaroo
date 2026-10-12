@@ -18,6 +18,7 @@ export function discoveryOutcome(
   code: string,
   kind: SessionOutcomeKind = "failed",
   sessionId?: string,
+  workspace?: string,
 ): SourceDiscoveryOutcome {
   let message: string;
   let nextAction: string;
@@ -44,7 +45,7 @@ export function discoveryOutcome(
     nextAction = "Check that the transcript is readable JSONL and unchanged, then rediscover.";
   }
   const outcome: SessionOutcome = { kind, phase: "discovery", code, message, nextAction };
-  return { source, ...(sessionId ? { sessionId } : {}), sourcePath: filePath, displayName: basename(filePath), outcome };
+  return { source, ...(sessionId ? { sessionId } : {}), ...(workspace ? { workspace } : {}), sourcePath: filePath, displayName: basename(filePath), outcome };
 }
 
 export function fileErrorCode(error: unknown): FileWalkFailure["code"] {
@@ -70,13 +71,14 @@ export function sourceLoadFailureOutcome(summary: SourceSummary): SessionOutcome
     message: "The selected transcript could not be loaded, so it was not included in this operation.",
     nextAction: "Check that the transcript is still readable, then retry this session.",
   };
-  return { source: summary.source, sessionId: summary.id, sourcePath: summary.path, displayName: basename(summary.path), outcome };
+  return { source: summary.source, sessionId: summary.id, workspace: summary.workspace, sourcePath: summary.path, displayName: basename(summary.path), outcome };
 }
 
-export function missingSourceSessionOutcome(source: SourceName, sessionId: string): SessionOutcomeRecord {
+export function missingSourceSessionOutcome(source: SourceName, sessionId: string, workspace?: string): SessionOutcomeRecord {
   return {
     source,
     sessionId,
+    ...(workspace ? { workspace } : {}),
     displayName: sessionId,
     outcome: {
       kind: "failed",

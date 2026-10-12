@@ -36,17 +36,23 @@ describe("source adapters", () => {
   it("reports child Codex sessions as deferred under their parent", async () => {
     const root = await mkdtemp(join(tmpdir(), "t3-import-codex-child-discovery-"));
     const workspace = join(root, "workspace");
+    const otherWorkspace = join(root, "other-workspace");
     const sessions = join(root, "sessions");
     mkdirSync(workspace, { recursive: true });
+    mkdirSync(otherWorkspace, { recursive: true });
     mkdirSync(sessions, { recursive: true });
     process.env.CODEX_HOME = root;
     process.env.CODEX_BIN = join(root, "missing-codex-executable");
     const sessionId = "77777777-7777-4777-8777-777777777777";
     const path = join(sessions, "child.jsonl");
     jsonl(path, [{ type: "session_meta", payload: { id: sessionId, cwd: workspace, timestamp: "2026-01-01T00:00:00Z", thread_source: "agent" } }]);
+    jsonl(join(sessions, "other-workspace-child.jsonl"), [{ type: "session_meta", payload: { id: "88888888-8888-4888-8888-888888888888", cwd: otherWorkspace, timestamp: "2026-01-01T00:00:00Z", thread_source: "agent" } }]);
+    const staleId = "99999999-9999-4999-8999-999999999999";
+    jsonl(join(sessions, "stale-child.jsonl"), [{ type: "session_meta", payload: { id: staleId, cwd: workspace, timestamp: "2025-01-01T00:00:00Z", thread_source: "agent" } }]);
+    jsonl(join(root, "session_index.jsonl"), [{ id: staleId, updated_at: "2025-01-01T00:00:00Z" }]);
 
     const adapter = new CodexSource();
-    const discovered = await adapter.discoverWithOutcomes({ workspace });
+    const discovered = await adapter.discoverWithOutcomes({ workspace, since: new Date("2026-01-01T00:00:00Z") });
     expect(discovered.summaries).toEqual([]);
     expect(discovered.outcomes).toEqual([expect.objectContaining({
       source: "codex",

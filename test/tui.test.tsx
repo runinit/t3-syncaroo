@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { conversationStatusText, escapeDestination, helpTextForScreen, ImportTui, replacementStatusText, ReplacementReview, selectionMarker, StartT3Prompt } from "../src/tui.js";
+import { conversationStatusText, escapeDestination, helpTextForScreen, ImportTui, replacementStatusText, ReplacementReview, resultHeading, selectionMarker, StartT3Prompt } from "../src/tui.js";
 import type { ConversationReplacePreview, ConversationSyncPreview, TargetPaths } from "../src/core/types.js";
 import { canonicalConversation } from "./helpers.js";
 
@@ -55,6 +55,11 @@ describe("interactive TUI", () => {
     expect(helpTextForScreen("review")).toBe("Enter confirm  Esc back  q quit");
     expect(helpTextForScreen("result")).toBe("↑/↓ or j/k move  Enter confirm  q quit");
     expect(helpTextForScreen("running")).toBeUndefined();
+  });
+
+  it("marks a run with source failures as needing attention", () => {
+    expect(resultHeading(false)).toBe("Complete");
+    expect(resultHeading(true)).toBe("Completed with source outcomes");
   });
 
   it("only returns to option screens that were actually visited", () => {
@@ -162,6 +167,38 @@ describe("interactive TUI", () => {
       const frame = await waitForFrame(tui, "unsupported · codex unsupported.jsonl");
       expect(frame).toContain("does not contain a supported Codex session header");
       expect(frame).toContain("rediscover");
+    } finally {
+      tui.unmount();
+      if (previousHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousHome;
+      if (previousBin === undefined) delete process.env.CODEX_BIN;
+      else process.env.CODEX_BIN = previousBin;
+    }
+  });
+
+  it("keeps session outcomes scoped to the selected workspace and separates global scan diagnostics", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-tui-workspace-outcomes-"));
+    const workspace = join(root, "workspace");
+    const otherWorkspace = join(root, "other-workspace");
+    const sessions = join(root, "sessions");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(otherWorkspace, { recursive: true });
+    mkdirSync(sessions, { recursive: true });
+    writeFileSync(join(sessions, "root-session.jsonl"), `${JSON.stringify({ type: "session_meta", payload: { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", cwd: workspace, timestamp: "2026-01-01T00:00:00Z" } })}\n`);
+    writeFileSync(join(sessions, "selected-child.jsonl"), `${JSON.stringify({ type: "session_meta", payload: { id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", cwd: workspace, timestamp: "2026-01-01T00:00:00Z", thread_source: "agent" } })}\n`);
+    writeFileSync(join(sessions, "other-child.jsonl"), `${JSON.stringify({ type: "session_meta", payload: { id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", cwd: otherWorkspace, timestamp: "2026-01-01T00:00:00Z", thread_source: "agent" } })}\n`);
+    writeFileSync(join(sessions, "unrecognized.jsonl"), "not a Codex session\n");
+    const previousHome = process.env.CODEX_HOME;
+    const previousBin = process.env.CODEX_BIN;
+    process.env.CODEX_HOME = root;
+    process.env.CODEX_BIN = join(root, "missing-codex");
+    const tui = render(<ImportTui paths={paths} initialSource="codex" initialWorkspace={workspace} />);
+    try {
+      const frame = await waitForFrame(tui, "2 session outcomes for this workspace");
+      expect(frame).toContain("1 provider-wide scan diagnostic");
+      expect(frame).toContain("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb");
+      expect(frame).not.toContain("cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+      expect(frame).not.toContain("Completed with source outcomes");
     } finally {
       tui.unmount();
       if (previousHome === undefined) delete process.env.CODEX_HOME;

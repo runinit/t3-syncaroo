@@ -25,6 +25,7 @@ import { launchT3Code } from "./target/launch.js";
 import { resetT3RebuildableCache } from "./target/cache.js";
 import { inspectConversationReplacement, replaceConversations } from "./target/replace.js";
 import { sourceLoadFailureOutcome } from "./sources/files.js";
+import { summarizeOutcomeCounts } from "./core/outcomes.js";
 
 export type Screen = "preflight" | "blocked" | "source" | "workspace" | "provider" | "threads" | "review" | "running" | "result" | "launching" | "launch-error" | "error";
 
@@ -49,6 +50,10 @@ export function helpTextForScreen(screen: Screen, searching = false): string | u
   if (screen === "review") return "Enter confirm  Esc back  q quit";
   if (screen === "result") return "↑/↓ or j/k move  Enter confirm  q quit";
   return undefined;
+}
+
+export function resultHeading(hasSourceOutcomes: boolean): string {
+  return hasSourceOutcomes ? "Completed with source outcomes" : "Complete";
 }
 
 function Help({ screen, searching }: { screen: Screen; searching: boolean }): React.JSX.Element | null {
@@ -159,6 +164,7 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
   const [source, setSource] = useState<SourceName>(initialSource ?? "codex");
   const [summaries, setSummaries] = useState<SourceSummary[]>([]);
   const [sourceOutcomes, setSourceOutcomes] = useState<SessionOutcomeRecord[]>([]);
+  const [sourceDiagnostics, setSourceDiagnostics] = useState<SessionOutcomeRecord[]>([]);
   const [discoveryLoaded, setDiscoveryLoaded] = useState(false);
   const [workspace, setWorkspace] = useState<string>();
   const [provider, setProvider] = useState<string | undefined>(initialProvider);
@@ -188,6 +194,12 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
   }, [screen]);
 
   const workspaces = useMemo(() => [...new Map(summaries.map((summary) => [summary.workspace.toLowerCase(), summary.workspace])).values()], [summaries]);
+  const scopedSourceOutcomes = useMemo(() => workspace
+    ? sourceOutcomes.filter((outcome) => outcome.workspace?.toLowerCase() === workspace.toLowerCase())
+    : sourceOutcomes, [sourceOutcomes, workspace]);
+  const outcomeCounts = useMemo(() => summarizeOutcomeCounts([
+    ...(result?.results ?? []), ...(syncResult?.results ?? []), ...(replaceResult?.results ?? []),
+  ], scopedSourceOutcomes, sourceDiagnostics), [replaceResult, result, scopedSourceOutcomes, sourceDiagnostics, syncResult]);
   const providers = useMemo(() => listProviderInstances(paths, source), [paths, source]);
   const visibleThreads = useMemo(() => summaries
     .filter((summary) => !workspace || summary.workspace.toLowerCase() === workspace.toLowerCase())
@@ -264,9 +276,11 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
     setIndex(0);
     setDiscoveryLoaded(false);
     setSourceOutcomes([]);
+    setSourceDiagnostics([]);
     setSummaries([]);
     sourceAdapter(source).discoverWithOutcomes({}).then(({ summaries: items, outcomes }) => {
-      setSourceOutcomes(outcomes);
+      setSourceOutcomes(outcomes.filter((outcome) => Boolean(outcome.sessionId && outcome.workspace)));
+      setSourceDiagnostics(outcomes.filter((outcome) => !outcome.sessionId || !outcome.workspace));
       setSummaries(items);
       setDiscoveryLoaded(true);
       const selectedWorkspace = initialWorkspace
@@ -288,6 +302,7 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
     const items = summaries.filter((summary) => summary.workspace.toLowerCase() === workspace.toLowerCase());
     const queue = [...items];
     setPendingStatuses(items.length);
+    setSourceOutcomes((current) => current.filter((outcome) => outcome.outcome.phase === "discovery"));
     setSelected(new Set());
     setConversations(new Map());
     setSyncPreviews(new Map());
@@ -437,7 +452,7 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
       {screen === "preflight" && <Text>Checking whether T3 is running…</Text>}
       {screen === "blocked" && <><Text bold color="red">T3 is running</Text><Text>Close T3 before importing, syncing, or replacing{runtime?.pid ? ` (detected PID ${runtime.pid})` : ""}.</Text>{runtime?.origin ? <Text dimColor>Runtime: {runtime.origin}</Text> : null}<Text>Press r or Enter to check again, or q to quit.</Text></>}
       {screen === "source" && <><Text bold>Choose a source</Text><Menu items={["Codex", "Claude Code"]} index={index} /></>}
-      {screen === "workspace" && <><Text bold>Choose a workspace</Text>{!discoveryLoaded ? <Text>Discovering {source} conversations…</Text> : summaries.length === 0 ? <Text>No {source} conversations found.</Text> : <Menu items={workspaces} index={index} />}{sourceOutcomes.length > 0 ? <Box flexDirection="column"><Text color="yellow">{sourceOutcomes.length} source outcome{sourceOutcomes.length === 1 ? "" : "s"} need attention:</Text>{sourceOutcomes.slice(0, 4).map((item) => <Text key={`workspace-outcome:${item.source}:${item.sessionId ?? item.displayName}`}>{item.outcome.kind} · {item.source} {item.sessionId ?? item.displayName}: {item.outcome.message}{item.sourcePath ? ` Path: ${item.sourcePath}` : ""} Next: {item.outcome.nextAction}</Text>)}{sourceOutcomes.length > 4 ? <Text dimColor>{sourceOutcomes.length - 4} more; use the CLI list command for all paths.</Text> : null}</Box> : null}</>}
+      {screen === "workspace" && <><Text bold>Choose a workspace</Text>{!discoveryLoaded ? <Text>Discovering {source} conversations…</Text> : summaries.length === 0 ? <Text>No {source} conversations found.</Text> : <Menu items={workspaces} index={index} />}{sourceOutcomes.length + sourceDiagnostics.length > 0 ? <Box flexDirection="column"><Text color="yellow">{sourceOutcomes.length} session outcomes and {sourceDiagnostics.length} provider-wide scan diagnostics:</Text>{[...sourceOutcomes, ...sourceDiagnostics].slice(0, 4).map((item) => <Text key={`workspace-outcome:${item.source}:${item.sessionId ?? item.sourcePath ?? item.displayName}`}>{item.outcome.kind} · {item.source} {item.sessionId ?? item.displayName}: {item.outcome.message}{item.sourcePath ? ` Path: ${item.sourcePath}` : ""} Next: {item.outcome.nextAction}</Text>)}{sourceOutcomes.length + sourceDiagnostics.length > 4 ? <Text dimColor>{sourceOutcomes.length + sourceDiagnostics.length - 4} more; use the CLI list command for all paths.</Text> : null}</Box> : null}</>}
       {screen === "provider" && <><Text bold>Choose a T3 provider instance</Text><Menu items={providers} index={index} /></>}
       {screen === "threads" && <>
         <Text bold>{mode === "sync" ? "Select conversations to sync" : mode === "replace" ? "Select conversations to replace" : "Select conversations"} — {workspace}</Text>
@@ -455,13 +470,14 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
         })} index={index} selected={selectedVisible} disabled={disabledVisible} />
         {pendingStatuses > 0 ? <Text dimColor>Checking {pendingStatuses} conversation{pendingStatuses === 1 ? "" : "s"}…</Text> : null}
         {visibleThreads.length === 0 && <Text color="yellow">No matching conversations.</Text>}
-        {sourceOutcomes.length > 0 ? <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">{sourceOutcomes.length} source outcome{sourceOutcomes.length === 1 ? "" : "s"} need attention:</Text>
-          {sourceOutcomes.slice(0, 5).map((item) => <Text key={`outcome:${item.source}:${item.sessionId ?? item.sourcePath ?? item.displayName}:${item.outcome.phase}`} dimColor>
+        {scopedSourceOutcomes.length > 0 ? <Box marginTop={1} flexDirection="column">
+          <Text color="yellow">{scopedSourceOutcomes.length} session outcome{scopedSourceOutcomes.length === 1 ? "" : "s"} for this workspace:</Text>
+          {scopedSourceOutcomes.slice(0, 5).map((item) => <Text key={`outcome:${item.source}:${item.sessionId ?? item.sourcePath ?? item.displayName}:${item.outcome.phase}`} dimColor>
             {item.outcome.kind} · {item.source} {item.sessionId ?? item.displayName} · {item.outcome.message}{item.sourcePath ? ` Path: ${item.sourcePath}` : ""} Next: {item.outcome.nextAction}
           </Text>)}
-          {sourceOutcomes.length > 5 ? <Text dimColor>{sourceOutcomes.length - 5} more; run `list --source {source}` for all paths and recovery steps.</Text> : null}
+          {scopedSourceOutcomes.length > 5 ? <Text dimColor>{scopedSourceOutcomes.length - 5} more; run `list --source {source} --workspace {workspace}` for all paths and recovery steps.</Text> : null}
         </Box> : null}
+        {sourceDiagnostics.length > 0 ? <Text dimColor>{sourceDiagnostics.length} provider-wide scan diagnostic{sourceDiagnostics.length === 1 ? "" : "s"} also found; run `list --source {source}` for details.</Text> : null}
       </>}
       {screen === "review" && <>
         {preparedReplacements.length ? <>
@@ -480,21 +496,23 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
         </>}
       </>}
       {screen === "running" && <Text>Backing up and reconciling conversations…</Text>}
-      {screen === "result" && (result || syncResult || replaceResult || sourceOutcomes.length > 0) && <>
-        <Text bold color={result?.results.some((item) => item.status === "conflict") || sourceOutcomes.length > 0 ? "yellow" : "green"}>{result?.results.some((item) => item.status === "conflict") ? "Completed with import conflicts" : sourceOutcomes.length > 0 ? "Completed with source outcomes" : "Complete"}</Text>
+      {screen === "result" && (result || syncResult || replaceResult || scopedSourceOutcomes.length > 0 || sourceDiagnostics.length > 0) && <>
+        <Text bold color={result?.results.some((item) => item.status === "conflict") || scopedSourceOutcomes.length || sourceDiagnostics.length ? "yellow" : "green"}>{result?.results.some((item) => item.status === "conflict") ? "Completed with import conflicts" : resultHeading(Boolean(scopedSourceOutcomes.length || sourceDiagnostics.length))}</Text>
+        <Text dimColor>Classified {outcomeCounts.classified} sessions: {outcomeCounts.imported} imported · {outcomeCounts.synced} synced · {outcomeCounts.replaced} replaced · {outcomeCounts.alreadyImported} already current · {outcomeCounts.deferred} deferred · {outcomeCounts.conflict} conflicts · {outcomeCounts.unsupported} unsupported · {outcomeCounts.failed} failed. Provider-wide scan diagnostics: {outcomeCounts.scanDiagnostics}.</Text>
         {result ? <Text>Import backup: {result.backup ?? "not needed"}</Text> : null}
         {result?.results.map((item) => <Text key={`import:${item.threadId}`}>{item.status === "imported" ? "✓" : item.status === "conflict" ? "!" : "•"} {item.title} — {item.status}, {item.turns} turns, {item.events} events{item.warnings[0] ? `; ${item.warnings[0]}` : ""}</Text>)}
         {syncResult ? <Text>Sync backup: {syncResult.backup ?? "not needed"}</Text> : null}
         {syncResult?.results.map((item) => <Text key={`sync:${item.sourceKey}`}>{item.status === "synced" ? "✓" : "•"} {item.title} — {item.status}, {item.turnsAdded} added, {item.turnsAdopted} adopted, {item.events} events</Text>)}
         {replaceResult ? <Text>Replacement backup: {replaceResult.backup ?? "not needed"}</Text> : null}
         {replaceResult?.results.map((item) => <Text key={`replace:${item.sourceKey}`}>{item.status === "replaced" ? "✓" : "•"} {item.title} — {item.status}{item.oldThreadId ? `, old ${item.oldThreadId}` : ""}{item.newThreadId ? `, new ${item.newThreadId}` : ""}, {item.turns} turns, {item.events} events</Text>)}
-        {sourceOutcomes.length > 0 ? <Box marginTop={1} flexDirection="column">
-          <Text color="yellow">Source outcomes needing attention: {sourceOutcomes.length}</Text>
-          {sourceOutcomes.slice(0, 8).map((item) => <Text key={`result-outcome:${item.source}:${item.sessionId ?? item.sourcePath ?? item.displayName}:${item.outcome.phase}`} dimColor>
+        {scopedSourceOutcomes.length > 0 ? <Box marginTop={1} flexDirection="column">
+          <Text color="yellow">Session outcomes for this workspace: {scopedSourceOutcomes.length}</Text>
+          {scopedSourceOutcomes.slice(0, 8).map((item) => <Text key={`result-outcome:${item.source}:${item.sessionId ?? item.sourcePath ?? item.displayName}:${item.outcome.phase}`} dimColor>
             {item.outcome.kind} · {item.source} {item.sessionId ?? item.displayName} · {item.outcome.message}{item.sourcePath ? ` Path: ${item.sourcePath}` : ""} Next: {item.outcome.nextAction}
           </Text>)}
-          {sourceOutcomes.length > 8 ? <Text dimColor>{sourceOutcomes.length - 8} more; run `list --source {source}` for all paths and recovery steps.</Text> : null}
+          {scopedSourceOutcomes.length > 8 ? <Text dimColor>{scopedSourceOutcomes.length - 8} more; run `list --source {source} --workspace {workspace}` for all paths and recovery steps.</Text> : null}
         </Box> : null}
+        {sourceDiagnostics.length > 0 ? <Text color="yellow">Provider-wide scan diagnostics: {sourceDiagnostics.length}; run `list --source {source}` for all paths and recovery steps.</Text> : null}
         {(replaceResult?.cache ?? syncResult?.cache ?? result?.cache) ? <Text>Cache backup: {(replaceResult?.cache ?? syncResult?.cache ?? result?.cache)?.backup ?? "cache not found"}</Text> : null}
         {cacheWarning ? <Text color="yellow">{cacheWarning}</Text> : null}
         <StartT3Prompt index={index} />

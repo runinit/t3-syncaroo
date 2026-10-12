@@ -116,11 +116,28 @@ export interface SessionOutcomeRecord {
   source: SourceName;
   /** Present only when the session identifier was parsed from the source. */
   sessionId?: string;
+  /** Canonical workspace when the source entry was readable enough to identify it. */
+  workspace?: string;
   /** Local source locator for finding the affected file or folder. */
   sourcePath?: string;
   /** Short label for terminal summaries. */
   displayName: string;
   outcome: SessionOutcome;
+}
+
+export interface OperationOutcomeCounts {
+  success: number;
+  imported: number;
+  synced: number;
+  replaced: number;
+  planned: number;
+  alreadyImported: number;
+  deferred: number;
+  conflict: number;
+  unsupported: number;
+  failed: number;
+  scanDiagnostics: number;
+  classified: number;
 }
 
 export type SourceDiscoveryOutcome = SessionOutcomeRecord;
@@ -181,6 +198,9 @@ export interface ImportRunResult {
   results: ImportItemResult[];
   /** Source discovery or load failures encountered while building this run. */
   outcomes?: SessionOutcomeRecord[];
+  /** Provider-wide scan findings that could not be tied to an operation session. */
+  diagnostics?: SessionOutcomeRecord[];
+  counts?: OperationOutcomeCounts;
   warnings: string[];
 }
 
@@ -222,6 +242,8 @@ export interface SyncRunResult {
   cache?: CacheResetResult;
   results: SyncItemResult[];
   outcomes?: SessionOutcomeRecord[];
+  diagnostics?: SessionOutcomeRecord[];
+  counts?: OperationOutcomeCounts;
   warnings: string[];
   hasConflicts: boolean;
 }
@@ -275,6 +297,8 @@ export interface ReplaceRunResult {
   cache?: CacheResetResult;
   results: ReplaceItemResult[];
   outcomes?: SessionOutcomeRecord[];
+  diagnostics?: SessionOutcomeRecord[];
+  counts?: OperationOutcomeCounts;
   warnings: string[];
   hasConflicts: boolean;
 }

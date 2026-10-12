@@ -1,8 +1,9 @@
 import { spawnSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
+import { createTarget } from "./helpers.js";
 
 const root = process.cwd();
 
@@ -65,7 +66,8 @@ describe("global target options", () => {
     const home = mkdtempSync(join(tmpdir(), "t3-import-cli-missing-session-"));
     const workspace = join(home, "workspace");
     mkdirSync(workspace, { recursive: true });
-    const result = cli(["--json", "import", "--source", "codex", "--workspace", workspace, "--thread", "missing-session", "--dry-run"], {
+    const target = createTarget(join(home, "t3"));
+    const result = cli(["--json", "--t3-home", target.t3Home, "import", "--source", "codex", "--workspace", workspace, "--thread", "missing-session", "--dry-run"], {
       ...process.env,
       CODEX_HOME: home,
       CODEX_BIN: join(home, "missing-codex"),
@@ -77,5 +79,100 @@ describe("global target options", () => {
       sessionId: "missing-session",
       outcome: expect.objectContaining({ kind: "failed", phase: "discovery", nextAction: expect.stringContaining("workspace filters") }),
     })]);
+  });
+
+  it("validates the target read-only before reporting an empty-install no-op", () => {
+    const root = mkdtempSync(join(tmpdir(), "t3-import-cli-empty-install-"));
+    const workspace = join(root, "workspace");
+    mkdirSync(workspace, { recursive: true });
+    const target = createTarget(join(root, "t3"));
+    const before = readFileSync(target.dbPath);
+    const result = cli(["--json", "--t3-home", target.t3Home, "import", "--source", "codex", "--workspace", workspace, "--all", "--dry-run"], {
+      ...process.env,
+      CODEX_HOME: join(root, "codex"),
+      CODEX_BIN: join(root, "missing-codex"),
+      T3_IMPORT_DATA_DIR: join(root, "ledger"),
+    });
+    expect(result.status).toBe(0);
+    expect(JSON.parse(result.stdout)).toMatchObject({ status: "no-op", outcomes: [], diagnostics: [], counts: { classified: 0, scanDiagnostics: 0 } });
+    expect(readFileSync(target.dbPath)).toEqual(before);
+    expect(existsSync(target.attachmentsDir)).toBe(false);
+    expect(existsSync(join(root, "ledger"))).toBe(false);
+  });
+
+  it("retains the deferred child outcome for an explicit selection without duplicating or including other scan errors", () => {
+    const root = mkdtempSync(join(tmpdir(), "t3-import-cli-child-selection-"));
+    const workspace = join(root, "workspace");
+    const sessions = join(root, "sessions");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(sessions, { recursive: true });
+    const target = createTarget(join(root, "t3"));
+    const sessionId = "77777777-7777-4777-8777-777777777777";
+    writeFileSync(join(sessions, "child.jsonl"), `${JSON.stringify({ type: "session_meta", payload: { id: sessionId, cwd: workspace, timestamp: "2026-01-01T00:00:00Z", thread_source: "agent" } })}\n`);
+    writeFileSync(join(sessions, "unrelated.jsonl"), "not a Codex session\n");
+    const result = cli(["--json", "--t3-home", target.t3Home, "import", "--source", "codex", "--workspace", workspace, "--thread", sessionId, "--dry-run"], {
+      ...process.env,
+      CODEX_HOME: root,
+      CODEX_BIN: join(root, "missing-codex"),
+    });
+    expect(result.status).toBe(6);
+    const payload = JSON.parse(result.stdout) as { outcomes: Array<{ sessionId: string; outcome: { kind: string; code: string } }>; diagnostics?: unknown[]; counts: { classified: number; deferred: number; failed: number; scanDiagnostics: number } };
+    expect(payload.outcomes).toEqual([expect.objectContaining({ sessionId, outcome: expect.objectContaining({ kind: "deferred", code: "child-session-contained-by-parent", message: expect.any(String), nextAction: expect.any(String) }) })]);
+    expect(payload.diagnostics).toEqual([]);
+    expect(payload.counts).toMatchObject({ classified: 1, deferred: 1, failed: 0, scanDiagnostics: 0 });
+  });
+
+  it("continues an import batch when one discovered transcript cannot be loaded", () => {
+    const root = mkdtempSync(join(tmpdir(), "t3-import-cli-partial-load-"));
+    const workspace = join(root, "workspace");
+    const sessions = join(root, "sessions");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(sessions, { recursive: true });
+    const target = createTarget(join(root, "t3"));
+    const validId = "11111111-2222-4333-8444-555555555555";
+    const brokenId = "66666666-7777-4888-8999-aaaaaaaaaaaa";
+    writeFileSync(join(sessions, "valid.jsonl"), [
+      { timestamp: "2026-01-01T00:00:00Z", type: "session_meta", payload: { id: validId, cwd: workspace, timestamp: "2026-01-01T00:00:00Z" } },
+      { timestamp: "2026-01-01T00:00:00Z", type: "turn_context", payload: { model: "gpt-test", cwd: workspace } },
+      { timestamp: "2026-01-01T00:00:00Z", type: "event_msg", payload: { type: "task_started", turn_id: "turn-1" } },
+      { timestamp: "2026-01-01T00:00:00Z", type: "response_item", payload: { type: "message", role: "user", id: "user-1", content: [{ type: "input_text", text: "Hello" }] } },
+      { timestamp: "2026-01-01T00:00:01Z", type: "response_item", payload: { type: "message", role: "assistant", id: "assistant-1", content: [{ type: "output_text", text: "Hi" }] } },
+      { timestamp: "2026-01-01T00:00:02Z", type: "event_msg", payload: { type: "task_complete", turn_id: "turn-1" } },
+    ].map((row) => JSON.stringify(row)).join("\n") + "\n");
+    writeFileSync(join(sessions, "broken.jsonl"), `${JSON.stringify({ type: "session_meta", payload: { id: brokenId, cwd: workspace, timestamp: "2026-01-01T00:00:00Z" } })}\n{broken JSON\n`);
+    const result = cli(["--json", "--t3-home", target.t3Home, "import", "--source", "codex", "--workspace", workspace, "--all", "--dry-run"], {
+      ...process.env,
+      CODEX_HOME: root,
+      CODEX_BIN: join(root, "missing-codex"),
+    });
+    expect(result.status).toBe(0);
+    const payload = JSON.parse(result.stdout) as {
+      results: Array<{ sourceId: string; status: string }>;
+      outcomes: Array<{ sessionId: string; outcome: { kind: string; phase: string; code: string } }>;
+      counts: { classified: number; planned: number; failed: number };
+    };
+    expect(payload.results).toEqual([expect.objectContaining({ sourceId: validId, status: "dry-run" })]);
+    expect(payload.outcomes).toEqual([expect.objectContaining({ sessionId: brokenId, outcome: expect.objectContaining({ kind: "failed", phase: "load", code: "source-load-failed" }) })]);
+    expect(payload.counts).toMatchObject({ classified: 2, planned: 1, failed: 1 });
+  });
+
+  it("keeps incompatible targets as hard failures when source loading yields no sessions", () => {
+    const root = mkdtempSync(join(tmpdir(), "t3-import-cli-invalid-empty-target-"));
+    const workspace = join(root, "workspace");
+    mkdirSync(workspace, { recursive: true });
+    const target = createTarget(join(root, "t3"), 54);
+    const before = readFileSync(target.dbPath);
+    const result = cli(["--json", "--t3-home", target.t3Home, "import", "--source", "codex", "--workspace", workspace, "--all", "--dry-run"], {
+      ...process.env,
+      CODEX_HOME: join(root, "codex"),
+      CODEX_BIN: join(root, "missing-codex"),
+      T3_IMPORT_DATA_DIR: join(root, "ledger"),
+    });
+    expect(result.status).toBe(3);
+    expect(JSON.parse(result.stdout)).toMatchObject({ status: "error" });
+    expect(result.stdout).toContain("Unsupported T3 schema migration 54");
+    expect(readFileSync(target.dbPath)).toEqual(before);
+    expect(existsSync(target.attachmentsDir)).toBe(false);
+    expect(existsSync(join(root, "ledger"))).toBe(false);
   });
 });

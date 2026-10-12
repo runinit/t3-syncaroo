@@ -9,11 +9,12 @@ import { stdin as input, stdout as output } from "node:process";
 import { z } from "zod";
 import { ImportTui } from "./tui.js";
 import { ImporterError, usageError } from "./core/errors.js";
+import { summarizeOutcomeCounts } from "./core/outcomes.js";
 import type { CanonicalConversation, DiscoveryOptions, ImportRunResult, ReplaceRunResult, SessionOutcomeRecord, SourceAdapter, SourceName, SourceSummary, SyncRunResult } from "./core/types.js";
 import { disposeSourceAdapters, sourceAdapter } from "./sources/index.js";
 import { resolveTargetPaths, type TargetOverrides } from "./target/config.js";
 import { IMPORTER_VERSION, importConversations } from "./target/importer.js";
-import { inspectRuntime, validateTargetDatabase } from "./target/schema.js";
+import { inspectRuntime, validateTargetDatabase, validateTargetReadOnly } from "./target/schema.js";
 import { inspectConversationSync, syncConversations } from "./target/sync.js";
 import { replaceConversations } from "./target/replace.js";
 import { discoverT3CacheProfiles, formatCacheResetResult, resetT3RebuildableCache } from "./target/cache.js";
@@ -32,6 +33,12 @@ function shouldResetCache(): boolean { return program.opts<{ cacheReset?: boolea
 function print(value: unknown): void { console.log(isJson() ? JSON.stringify(value) : typeof value === "string" ? value : JSON.stringify(value, null, 2)); }
 function formatOutcomes(outcomes: SessionOutcomeRecord[]): string {
   return outcomes.map((item) => `- ${item.outcome.kind} (${item.source}${item.sessionId ? ` ${item.sessionId}` : ""}) ${item.displayName}: ${item.outcome.message}${item.sourcePath ? `\n  ${item.sourcePath}` : ""}\n  Next: ${item.outcome.nextAction}`).join("\n");
+}
+function discoveryOutcomesForSelection(outcomes: SessionOutcomeRecord[], selectedIds: Set<string> | undefined): SessionOutcomeRecord[] {
+  return outcomes.filter((item) => item.sessionId && (!selectedIds || selectedIds.has(item.sessionId)));
+}
+function providerScanDiagnostics(outcomes: SessionOutcomeRecord[]): SessionOutcomeRecord[] {
+  return outcomes.filter((item) => !item.sessionId);
 }
 function parseSince(value?: string): Date | undefined {
   if (!value) return undefined;
@@ -79,10 +86,11 @@ async function loadSelected(adapter: SourceAdapter, summaries: SourceSummary[], 
   };
 }
 
-function reportNoLoadedSessions(paths: ReturnType<typeof resolveTargetPaths>, outcomes: SessionOutcomeRecord[]): void {
-  const message = `No conversations were loaded for this operation.${outcomes.length ? `\n${formatOutcomes(outcomes)}` : ""}`;
-  print(isJson() ? { schemaVersion: 1, status: "no-op", target: paths.dbPath, results: [], outcomes } : message);
-  if (outcomes.length) process.exitCode = 6;
+async function reportNoLoadedSessions(paths: ReturnType<typeof resolveTargetPaths>, outcomes: SessionOutcomeRecord[], diagnostics: SessionOutcomeRecord[] = [], reason = "No conversations were loaded for this operation."): Promise<void> {
+  validateTargetReadOnly(paths.dbPath);
+  const message = `${reason}${outcomes.length ? `\n${formatOutcomes(outcomes)}` : ""}${diagnostics.length ? `\nProvider scan diagnostics:\n${formatOutcomes(diagnostics)}` : ""}`;
+  print(isJson() ? { schemaVersion: 1, status: "no-op", target: paths.dbPath, results: [], outcomes, diagnostics, counts: summarizeOutcomeCounts([], outcomes, diagnostics) } : message);
+  if (outcomes.length || diagnostics.length) process.exitCode = 6;
 }
 
 async function attachCacheReset<T extends ImportRunResult | SyncRunResult | ReplaceRunResult>(
@@ -224,18 +232,22 @@ program.command("import")
     const selected: SourceSummary[] = options.all ? summaries : options.thread.flatMap((id) => {
       const summary = summaries.find((item) => item.id === id);
       if (!summary) {
-        missingSelections.push(missingSourceSessionOutcome(source, id));
+        if (!discovered.outcomes.some((item) => item.sessionId === id)) missingSelections.push(missingSourceSessionOutcome(source, id));
         return [];
       }
       return [summary];
     });
     const loadResult = await loadSelected(adapter, selected, { workspace: options.workspace, ...(since ? { since } : {}), ...(options.includeIncomplete !== undefined ? { includeIncomplete: options.includeIncomplete } : {}) });
     const loaded = loadResult.conversations.map((conversation) => ({ conversation, resume: options.resume }));
-    const outcomes = [...discovered.outcomes, ...missingSelections, ...loadResult.outcomes];
-    if (loaded.length === 0 && outcomes.length > 0) { reportNoLoadedSessions(paths, outcomes); return; }
+    const selectedIds = options.all ? undefined : new Set(options.thread);
+    const outcomes = [...discoveryOutcomesForSelection(discovered.outcomes, selectedIds), ...missingSelections, ...loadResult.outcomes];
+    const diagnostics = options.all ? providerScanDiagnostics(discovered.outcomes) : [];
+    if (loaded.length === 0) { await reportNoLoadedSessions(paths, outcomes, diagnostics); return; }
     reportWriteTarget(paths, Boolean(options.dryRun));
     const result: ImportRunResult = await importConversations(loaded, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun), resume: options.resume });
     result.outcomes = outcomes;
+    if (diagnostics.length) result.diagnostics = diagnostics;
+    result.counts = summarizeOutcomeCounts(result.results, outcomes, diagnostics);
     await attachCacheReset(result, paths, result.results.some((item) => item.status === "imported"));
     print(result);
   });
@@ -274,16 +286,20 @@ program.command("replace")
     const selected = [...new Set(options.thread)].flatMap((id) => {
       const summaries = discovered.summaries;
       const summary = summaries.find((item) => item.id === id);
-      if (!summary) { missingSelections.push(missingSourceSessionOutcome(source, id)); return []; }
+      if (!summary) {
+        if (!discovered.outcomes.some((item) => item.sessionId === id)) missingSelections.push(missingSourceSessionOutcome(source, id));
+        return [];
+      }
       return [summary];
     });
     const loadResult = await loadSelected(adapter, selected, { workspace: options.workspace! });
     const loaded = loadResult.conversations.map((conversation) => ({ conversation }));
-    const outcomes = [...discovered.outcomes, ...missingSelections, ...loadResult.outcomes];
-    if (loaded.length === 0 && outcomes.length > 0) { reportNoLoadedSessions(paths, outcomes); return; }
+    const outcomes = [...discoveryOutcomesForSelection(discovered.outcomes, new Set(options.thread)), ...missingSelections, ...loadResult.outcomes];
+    if (loaded.length === 0) { await reportNoLoadedSessions(paths, outcomes); return; }
     reportWriteTarget(paths, Boolean(options.dryRun));
     const result = await replaceConversations(loaded, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun) });
     result.outcomes = outcomes;
+    result.counts = summarizeOutcomeCounts(result.results, outcomes, []);
     await attachCacheReset(result, paths, result.results.some((item) => item.status === "replaced"));
     print(result);
     if (result.hasConflicts) process.exitCode = 7;
@@ -332,19 +348,26 @@ program.command("sync")
     const missingSelections: SessionOutcomeRecord[] = [];
     const selected = options.all ? discovered.summaries : options.thread.flatMap((id) => {
       const summary = discovered.summaries.find((item) => item.id === id);
-      if (!summary) { missingSelections.push(missingSourceSessionOutcome(source, id)); return []; }
+      if (!summary) {
+        if (!discovered.outcomes.some((item) => item.sessionId === id)) missingSelections.push(missingSourceSessionOutcome(source, id));
+        return [];
+      }
       return [summary];
     });
     const loadResult = await loadSelected(adapter, selected, { workspace: options.workspace! });
     const loaded = loadResult.conversations.map((conversation) => ({ conversation }));
-    const outcomes = [...discovered.outcomes, ...missingSelections, ...loadResult.outcomes];
-    if (loaded.length === 0 && outcomes.length > 0) { reportNoLoadedSessions(paths, outcomes); return; }
+    const outcomes = [...(options.all ? [] : discoveryOutcomesForSelection(discovered.outcomes, new Set(options.thread))), ...missingSelections, ...loadResult.outcomes];
+    const diagnostics = options.all ? discovered.outcomes : [];
+    if (loaded.length === 0 && !options.all) { await reportNoLoadedSessions(paths, outcomes); return; }
     const eligible = options.all
       ? (await Promise.all(loaded.map(async (selection) => ({ selection, preview: await inspectConversationSync(selection.conversation, paths) })))).filter((item) => item.preview.previouslyImported).map((item) => item.selection)
       : loaded;
+    if (eligible.length === 0) { await reportNoLoadedSessions(paths, outcomes, diagnostics, "No eligible previously imported conversations were found for synchronization."); return; }
     reportWriteTarget(paths, Boolean(options.dryRun));
     const result = await syncConversations(eligible, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun) });
     result.outcomes = outcomes;
+    if (diagnostics.length) result.diagnostics = diagnostics;
+    result.counts = summarizeOutcomeCounts(result.results, outcomes, diagnostics);
     await attachCacheReset(result, paths, result.results.some((item) => item.status === "synced"));
     print(result);
     if (result.hasConflicts) process.exitCode = 7;
