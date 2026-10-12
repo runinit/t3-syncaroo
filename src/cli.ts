@@ -229,7 +229,7 @@ program.command("import")
     const discovered = await adapter.discoverWithOutcomes({ workspace: options.workspace, ...(since ? { since } : {}), ...(options.includeIncomplete !== undefined ? { includeIncomplete: options.includeIncomplete } : {}) });
     const summaries = discovered.summaries;
     const missingSelections: SessionOutcomeRecord[] = [];
-    const selected: SourceSummary[] = options.all ? summaries : options.thread.flatMap((id) => {
+    const selected: SourceSummary[] = options.all ? summaries : [...new Set(options.thread)].flatMap((id) => {
       const summary = summaries.find((item) => item.id === id);
       if (!summary) {
         if (!discovered.outcomes.some((item) => item.sessionId === id)) missingSelections.push(missingSourceSessionOutcome(source, id));
@@ -346,7 +346,7 @@ program.command("sync")
     const since = parseSince(options.since);
     const discovered = await adapter.discoverWithOutcomes({ workspace: options.workspace, ...(since ? { since } : {}) });
     const missingSelections: SessionOutcomeRecord[] = [];
-    const selected = options.all ? discovered.summaries : options.thread.flatMap((id) => {
+    const selected = options.all ? discovered.summaries : [...new Set(options.thread)].flatMap((id) => {
       const summary = discovered.summaries.find((item) => item.id === id);
       if (!summary) {
         if (!discovered.outcomes.some((item) => item.sessionId === id)) missingSelections.push(missingSourceSessionOutcome(source, id));
@@ -356,12 +356,32 @@ program.command("sync")
     });
     const loadResult = await loadSelected(adapter, selected, { workspace: options.workspace! });
     const loaded = loadResult.conversations.map((conversation) => ({ conversation }));
-    const outcomes = [...(options.all ? [] : discoveryOutcomesForSelection(discovered.outcomes, new Set(options.thread))), ...missingSelections, ...loadResult.outcomes];
-    const diagnostics = options.all ? discovered.outcomes : [];
+    const outcomes = [...discoveryOutcomesForSelection(discovered.outcomes, options.all ? undefined : new Set(options.thread)), ...missingSelections, ...loadResult.outcomes];
+    const diagnostics = options.all ? providerScanDiagnostics(discovered.outcomes) : [];
     if (loaded.length === 0 && !options.all) { await reportNoLoadedSessions(paths, outcomes); return; }
+    const previews = options.all
+      ? await Promise.all(loaded.map(async (selection) => ({ selection, preview: await inspectConversationSync(selection.conversation, paths) })))
+      : loaded.map((selection) => ({ selection, preview: undefined }));
     const eligible = options.all
-      ? (await Promise.all(loaded.map(async (selection) => ({ selection, preview: await inspectConversationSync(selection.conversation, paths) })))).filter((item) => item.preview.previouslyImported).map((item) => item.selection)
+      ? previews.filter((item) => item.preview?.previouslyImported).map((item) => item.selection)
       : loaded;
+    if (options.all) {
+      const notImported = previews.filter((item) => item.preview && !item.preview.previouslyImported).map(({ selection }) => ({
+        source,
+        sessionId: selection.conversation.summary.id,
+        workspace: selection.conversation.summary.workspace,
+        sourcePath: selection.conversation.summary.path,
+        displayName: selection.conversation.summary.title,
+        outcome: {
+          kind: "deferred" as const,
+          phase: "preview" as const,
+          code: "source-session-not-imported",
+          message: "This conversation was not synchronized because it has no matching imported T3 task.",
+          nextAction: "Import this conversation first, then run sync again.",
+        },
+      }));
+      outcomes.push(...notImported);
+    }
     if (eligible.length === 0) { await reportNoLoadedSessions(paths, outcomes, diagnostics, "No eligible previously imported conversations were found for synchronization."); return; }
     reportWriteTarget(paths, Boolean(options.dryRun));
     const result = await syncConversations(eligible, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun) });

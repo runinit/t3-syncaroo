@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { conversationStatusText, escapeDestination, helpTextForScreen, ImportTui, replacementStatusText, ReplacementReview, resultHeading, selectionMarker, StartT3Prompt } from "../src/tui.js";
+import { conversationStatusText, escapeDestination, helpTextForScreen, ImportTui, OperationItemWarnings, operationNextAction, replacementStatusText, ReplacementReview, resultHeading, selectionMarker, StartT3Prompt } from "../src/tui.js";
 import type { ConversationReplacePreview, ConversationSyncPreview, TargetPaths } from "../src/core/types.js";
 import { canonicalConversation } from "./helpers.js";
 
@@ -59,7 +59,17 @@ describe("interactive TUI", () => {
 
   it("marks a run with source failures as needing attention", () => {
     expect(resultHeading(false)).toBe("Complete");
-    expect(resultHeading(true)).toBe("Completed with source outcomes");
+    expect(resultHeading(true)).toBe("Completed with items needing attention");
+  });
+
+  it("renders an operation conflict warning with an actionable recovery step", () => {
+    const tui = render(<OperationItemWarnings title="Changed conversation" status="history-diverged" warnings={["The provider transcript differs from the imported T3 history."]} />);
+    const frame = tui.lastFrame() ?? "";
+    expect(frame).toContain("Changed conversation");
+    expect(frame).toContain("provider transcript differs");
+    expect(frame).toContain(operationNextAction("history-diverged"));
+    expect(resultHeading(true)).toBe("Completed with items needing attention");
+    tui.unmount();
   });
 
   it("only returns to option screens that were actually visited", () => {

@@ -100,6 +100,27 @@ describe("global target options", () => {
     expect(existsSync(join(root, "ledger"))).toBe(false);
   });
 
+  it("keeps all-import session outcomes separate from provider-wide scan diagnostics", () => {
+    const root = mkdtempSync(join(tmpdir(), "t3-import-cli-all-diagnostics-"));
+    const workspace = join(root, "workspace");
+    const sessions = join(root, "sessions");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(sessions, { recursive: true });
+    writeFileSync(join(sessions, "unsupported.jsonl"), "not a Codex session\n");
+    const target = createTarget(join(root, "t3"));
+    const result = cli(["--json", "--t3-home", target.t3Home, "import", "--source", "codex", "--workspace", workspace, "--all", "--dry-run"], {
+      ...process.env,
+      CODEX_HOME: root,
+      CODEX_BIN: join(root, "missing-codex"),
+    });
+    expect(result.status).toBe(6);
+    const payload = JSON.parse(result.stdout) as { outcomes: unknown[]; diagnostics: Array<{ sessionId?: string }>; counts: { classified: number; scanDiagnostics: number } };
+    expect(payload.outcomes).toEqual([]);
+    expect(payload.diagnostics).toHaveLength(1);
+    expect(payload.diagnostics[0]?.sessionId).toBeUndefined();
+    expect(payload.counts).toMatchObject({ classified: 0, scanDiagnostics: 1 });
+  });
+
   it("retains the deferred child outcome for an explicit selection without duplicating or including other scan errors", () => {
     const root = mkdtempSync(join(tmpdir(), "t3-import-cli-child-selection-"));
     const workspace = join(root, "workspace");

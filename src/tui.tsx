@@ -52,8 +52,24 @@ export function helpTextForScreen(screen: Screen, searching = false): string | u
   return undefined;
 }
 
-export function resultHeading(hasSourceOutcomes: boolean): string {
-  return hasSourceOutcomes ? "Completed with source outcomes" : "Complete";
+export function resultHeading(hasIssues: boolean): string {
+  return hasIssues ? "Completed with items needing attention" : "Complete";
+}
+
+export function operationNextAction(status: string): string {
+  if (status === "history-diverged") return "Use replace to apply the changed provider history to this T3 task.";
+  if (status === "active-source") return "Wait for the provider session to finish, then retry the operation.";
+  if (status === "target-missing" || status === "not-imported") return "Import this conversation before synchronizing or replacing it.";
+  if (status.includes("unsupported")) return "This operation supports only single-branch conversations.";
+  return "Review the warning and confirm the resulting T3 task before continuing.";
+}
+
+export function OperationItemWarnings({ title, status, warnings }: { title: string; status: string; warnings: string[] }): React.JSX.Element | null {
+  if (warnings.length === 0 && !["history-diverged", "active-source", "target-missing", "not-imported", "branch-sync-unsupported", "branch-replace-unsupported"].includes(status)) return null;
+  return <Box flexDirection="column">
+    {warnings.map((warning, index) => <Text key={`${title}:${index}`} color="yellow">Warning · {title}: {warning}</Text>)}
+    <Text color="yellow">Next: {operationNextAction(status)}</Text>
+  </Box>;
 }
 
 function Help({ screen, searching }: { screen: Screen; searching: boolean }): React.JSX.Element | null {
@@ -200,6 +216,13 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
   const outcomeCounts = useMemo(() => summarizeOutcomeCounts([
     ...(result?.results ?? []), ...(syncResult?.results ?? []), ...(replaceResult?.results ?? []),
   ], scopedSourceOutcomes, sourceDiagnostics), [replaceResult, result, scopedSourceOutcomes, sourceDiagnostics, syncResult]);
+  const hasOperationIssues = Boolean(
+    result?.warnings.length || syncResult?.warnings.length || replaceResult?.warnings.length ||
+    result?.results.some((item) => item.status === "conflict" || item.warnings.length) || syncResult?.results.some((item) => item.warnings.length) || replaceResult?.results.some((item) => item.warnings.length) ||
+    syncResult?.hasConflicts || replaceResult?.hasConflicts ||
+    syncResult?.results.some((item) => ["history-diverged", "active-source", "target-missing", "not-imported", "branch-sync-unsupported"].includes(item.status)) ||
+    replaceResult?.results.some((item) => ["active-source", "target-missing", "not-imported", "branch-replace-unsupported"].includes(item.status))
+  );
   const providers = useMemo(() => listProviderInstances(paths, source), [paths, source]);
   const visibleThreads = useMemo(() => summaries
     .filter((summary) => !workspace || summary.workspace.toLowerCase() === workspace.toLowerCase())
@@ -497,14 +520,17 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
       </>}
       {screen === "running" && <Text>Backing up and reconciling conversations…</Text>}
       {screen === "result" && (result || syncResult || replaceResult || scopedSourceOutcomes.length > 0 || sourceDiagnostics.length > 0) && <>
-        <Text bold color={result?.results.some((item) => item.status === "conflict") || scopedSourceOutcomes.length || sourceDiagnostics.length ? "yellow" : "green"}>{result?.results.some((item) => item.status === "conflict") ? "Completed with import conflicts" : resultHeading(Boolean(scopedSourceOutcomes.length || sourceDiagnostics.length))}</Text>
+        <Text bold color={scopedSourceOutcomes.length || sourceDiagnostics.length || hasOperationIssues ? "yellow" : "green"}>{resultHeading(Boolean(scopedSourceOutcomes.length || sourceDiagnostics.length || hasOperationIssues))}</Text>
         <Text dimColor>Classified {outcomeCounts.classified} sessions: {outcomeCounts.imported} imported · {outcomeCounts.synced} synced · {outcomeCounts.replaced} replaced · {outcomeCounts.alreadyImported} already current · {outcomeCounts.deferred} deferred · {outcomeCounts.conflict} conflicts · {outcomeCounts.unsupported} unsupported · {outcomeCounts.failed} failed. Provider-wide scan diagnostics: {outcomeCounts.scanDiagnostics}.</Text>
         {result ? <Text>Import backup: {result.backup ?? "not needed"}</Text> : null}
-        {result?.results.map((item) => <Text key={`import:${item.threadId}`}>{item.status === "imported" ? "✓" : item.status === "conflict" ? "!" : "•"} {item.title} — {item.status}, {item.turns} turns, {item.events} events{item.warnings[0] ? `; ${item.warnings[0]}` : ""}</Text>)}
+        {result?.results.map((item) => <Box key={`import:${item.threadId}`} flexDirection="column"><Text>{item.status === "imported" ? "✓" : item.status === "conflict" ? "!" : "•"} {item.title} — {item.status}, {item.turns} turns, {item.events} events</Text><OperationItemWarnings title={item.title} status={item.status} warnings={item.warnings} /></Box>)}
+        {result?.warnings.map((warning, index) => <Text key={`import-warning:${index}`} color="yellow">Warning: {warning}</Text>)}
         {syncResult ? <Text>Sync backup: {syncResult.backup ?? "not needed"}</Text> : null}
-        {syncResult?.results.map((item) => <Text key={`sync:${item.sourceKey}`}>{item.status === "synced" ? "✓" : "•"} {item.title} — {item.status}, {item.turnsAdded} added, {item.turnsAdopted} adopted, {item.events} events</Text>)}
+        {syncResult?.results.map((item) => <Box key={`sync:${item.sourceKey}`} flexDirection="column"><Text>{item.status === "synced" ? "✓" : "•"} {item.title} — {item.status}, {item.turnsAdded} added, {item.turnsAdopted} adopted, {item.events} events</Text><OperationItemWarnings title={item.title} status={item.status} warnings={item.warnings} /></Box>)}
+        {syncResult?.warnings.map((warning, index) => <Text key={`sync-warning:${index}`} color="yellow">Warning: {warning}</Text>)}
         {replaceResult ? <Text>Replacement backup: {replaceResult.backup ?? "not needed"}</Text> : null}
-        {replaceResult?.results.map((item) => <Text key={`replace:${item.sourceKey}`}>{item.status === "replaced" ? "✓" : "•"} {item.title} — {item.status}{item.oldThreadId ? `, old ${item.oldThreadId}` : ""}{item.newThreadId ? `, new ${item.newThreadId}` : ""}, {item.turns} turns, {item.events} events</Text>)}
+        {replaceResult?.results.map((item) => <Box key={`replace:${item.sourceKey}`} flexDirection="column"><Text>{item.status === "replaced" ? "✓" : "•"} {item.title} — {item.status}{item.oldThreadId ? `, old ${item.oldThreadId}` : ""}{item.newThreadId ? `, new ${item.newThreadId}` : ""}, {item.turns} turns, {item.events} events</Text><OperationItemWarnings title={item.title} status={item.status} warnings={item.warnings} /></Box>)}
+        {replaceResult?.warnings.map((warning, index) => <Text key={`replace-warning:${index}`} color="yellow">Warning: {warning}</Text>)}
         {scopedSourceOutcomes.length > 0 ? <Box marginTop={1} flexDirection="column">
           <Text color="yellow">Session outcomes for this workspace: {scopedSourceOutcomes.length}</Text>
           {scopedSourceOutcomes.slice(0, 8).map((item) => <Text key={`result-outcome:${item.source}:${item.sessionId ?? item.sourcePath ?? item.displayName}:${item.outcome.phase}`} dimColor>
