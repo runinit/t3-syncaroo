@@ -112,10 +112,13 @@ thread were private to the disposable T3 home.
   source session.
 - Run the full ticket-09 acceptance only after tickets 05–08 and the final
   integration are ready; this report is evidence, not a completion claim.
-- The 54-scenario compatibility harness was not run in this environment:
-  `scripts/compatibility/prepare.mjs` requires the pinned reference checkout at
-  `repos/t3code`, which is absent here, and downloads/install steps for all
-  pinned Effect reference dependencies. The harness can be run after that
-  checkout is available; its existence does not replace the real provider
-  checks recorded above.
+- The 54-scenario legacy compatibility harness passed in an isolated worktree:
+  `./node_modules/.bin/tsx scripts/compatibility/run.ts` reported all 54
+  Codex/Claude migration and migration-upgrade scenarios passing for migrations
+  40–53. `npm run compat:prepare` used a filtered clone of the official T3
+  repository at `/tmp/t3-v2-compat-reference` and installed the pinned Effect
+  versions in the isolated worktree. Results are at
+  `/tmp/t3-import-real-provider-acceptance/artifacts/compatibility/run-TXbKgH/results.json`.
+  This is evidence for legacy compatibility only; it does not replace the
+  pinned `.2994` provider/desktop checks above.
 - Isolated desktop inspection remains explicitly deferred by the user.
