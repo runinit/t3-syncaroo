@@ -29,7 +29,7 @@ await Promise.all([packDir, consumer, home, codexHome, claudeHome, configHome, w
 run(process.execPath, [fixtureRunner, dbPath], { cwd: temp, env: { ...process.env, NODE_PATH: "" } });
 
 const packOutput = run("npm", ["pack", "--json", "--pack-destination", packDir], { cwd: root }).stdout;
-const packJsonStart = packOutput.indexOf("{\n");
+const packJsonStart = packOutput.search(/[\[{]/u);
 if (packJsonStart < 0) throw new Error(`npm pack did not return JSON metadata:\n${packOutput}`);
 const packMetadata = JSON.parse(packOutput.slice(packJsonStart));
 const packed = Array.isArray(packMetadata) ? packMetadata[0] : Object.values(packMetadata)[0];
