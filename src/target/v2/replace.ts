@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import { existsSync, rmSync } from "node:fs";
+import { basename, join } from "node:path";
 import type {
   CanonicalConversation,
   CanonicalThread,
@@ -14,16 +15,19 @@ import { isTerminalTurn } from "../../core/types.js";
 import { checkpointForThread } from "../../core/checkpoint.js";
 import { canonicalPath, deterministicUuid, sha256 } from "../../core/util.js";
 import { safetyError, writeError } from "../../core/errors.js";
-import { listImports, recordConsolidation, type LedgerRecord, type StoredLedgerRecord } from "../ledger.js";
+import { listImportsForTargets, recordConsolidation, type LedgerRecord, type StoredLedgerRecord } from "../ledger.js";
 import {
   callV2Native,
   createBackup,
   materializeAssets,
   planV2Thread,
+  type V2ThreadReply,
   IMPORTER_VERSION,
   type V2Plan,
 } from "../importer.js";
 import { projectedHistoryMatches } from "./history.js";
+import { verifyOrRecoverV2Assets } from "./assets.js";
+import { verifyUpgradedPrefix } from "./upgraded-binding.js";
 
 type NativeThread = {
   threadId: string;
@@ -41,6 +45,7 @@ type ReplacementPlan = {
   oldRecords: StoredLedgerRecord[];
   planned?: V2Plan;
   oldThreads?: NativeThread[];
+  upgradedPrefix?: { plan: V2Plan; expectedSnapshot: Record<string, unknown>; event?: Record<string, unknown>; attach: boolean };
   replacementId?: string;
   recoverLedger?: boolean;
   recoverySequences?: Array<{ eventId: string; threadId: string; sequence: number }>;
@@ -48,6 +53,25 @@ type ReplacementPlan = {
 };
 
 const targetHash = (paths: TargetPaths) => sha256(canonicalPath(paths.dbPath));
+
+function knownLedgerTargetIds(paths: TargetPaths): { current: string; all: string[] } {
+  const current = targetHash(paths);
+  const all = [current];
+  if (basename(paths.dbPath) === "statev2.sqlite") {
+    all.push(sha256(canonicalPath(join(paths.stateDir, "state.sqlite"))));
+  }
+  return { current, all: [...new Set(all)] };
+}
+
+function replacementLedgerRows(paths: TargetPaths, source: string): StoredLedgerRecord[] {
+  const { current, all } = knownLedgerTargetIds(paths);
+  const byThread = new Map<string, StoredLedgerRecord>();
+  for (const row of listImportsForTargets(all, source)
+    .sort((left, right) => Number(right.targetId === current) - Number(left.targetId === current))) {
+    if (!byThread.has(row.threadId)) byThread.set(row.threadId, row);
+  }
+  return [...byThread.values()];
+}
 
 export function replacementThreadId(sourceKey: string, oldThreadId: string): string {
   return deterministicUuid(`t3-import:replacement:${sourceKey}:${oldThreadId}`);
@@ -194,7 +218,7 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
     return { conversation, thread, oldRecords: [], result: item(thread, "branch-replace-unsupported", [], "Claude replacement requires exactly one identified non-sidechain leaf.") };
   }
 
-  const rows = listImports(targetHash(paths), thread.source);
+  const rows = replacementLedgerRows(paths, thread.source);
   const oldRecord = primaryRecord(rows, thread);
   if (!oldRecord) {
     return { conversation, thread, oldRecords: [], result: item(thread, "not-imported", [], "Conversation has no unambiguous canonical t3-import ledger owner.") };
@@ -242,9 +266,10 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
   }
   const source = nativeById.get(oldRecord.threadId);
   const marker = nativeProjectionMarker(oldRecord);
-  if (!source || !projectedThread(source) || (!marker && !hasOwnedCreation(source, oldRecord))
+  const mayVerifyUpgrade = oldRecord.targetId !== targetHash(paths) && projectedThread(source)?.historyOrigin === "v1_import";
+  if (!source || !projectedThread(source) || (!marker && !mayVerifyUpgrade && !hasOwnedCreation(source, oldRecord))
     || projectedThread(source)?.projectId !== oldRecord.projectId
-    || (!marker && projectedThread(source)?.historyOrigin !== "v1_import")) {
+    || (!marker && !mayVerifyUpgrade && projectedThread(source)?.historyOrigin !== "v1_import")) {
     return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
       result: item(thread, "target-missing", oldRecords, "The native task no longer matches its canonical ledger owner.") };
   }
@@ -252,39 +277,88 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
     const record = oldRecords[index]!;
     const shell = projectedThread(value);
     const hasMarker = nativeProjectionMarker(record) !== undefined;
-    return !shell || shell.projectId !== oldRecord.projectId || (!hasMarker && shell.historyOrigin !== "v1_import")
-      || (!hasMarker && !hasOwnedCreation(value, record));
+    const canVerifyUpgrade = record.targetId !== targetHash(paths) && shell?.historyOrigin === "v1_import";
+    return !shell || shell.projectId !== oldRecord.projectId || (!hasMarker && !canVerifyUpgrade && shell.historyOrigin !== "v1_import")
+      || (!hasMarker && !canVerifyUpgrade && !hasOwnedCreation(value, record));
   })) {
     return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
       result: item(thread, "history-conflict", oldRecords, "One or more imported Claude fragments cannot be proven to share this project and source session.") };
   }
   const binding = nativeBinding(source);
   const providerInstance = String(projectedThread(source)?.providerInstanceId ?? "");
+  let upgradedPrefix: ReplacementPlan["upgradedPrefix"];
+  const fromLegacyTarget = oldRecord.targetId !== targetHash(paths);
+  if (fromLegacyTarget && projectedThread(source)?.historyOrigin === "v1_import" && providerInstance) {
+    const prefixCanResume = oldRecord.resumable && (thread.source !== "claude" || Boolean(oldRecord.nativeConversationHeadId));
+    const proof = verifyUpgradedPrefix({
+      sourceThread: thread,
+      target: source as V2ThreadReply,
+      expected: {
+        threadId: oldRecord.threadId,
+        projectId: oldRecord.projectId,
+        providerInstanceId: providerInstance,
+        sourceSessionId: oldRecord.sourceSessionId,
+        nativeThreadId: String(thread.resumeCursor?.threadId ?? thread.sourceSessionId),
+        sourceFingerprint: oldRecord.sourceFingerprint,
+        currentFingerprint: conversation.fingerprint,
+        identitySeed: oldRecord.identitySeed || oldRecord.sourceKey,
+        ...(oldRecord.checkpoint ? { checkpoint: oldRecord.checkpoint } : {}),
+        ...(oldRecord.nativeConversationHeadId ? { nativeConversationHeadId: oldRecord.nativeConversationHeadId } : {}),
+        resumable: prefixCanResume,
+      },
+      planPrefix: (prefixThread) => {
+        const savedPrefix = thread.source === "claude" && oldRecord.nativeConversationHeadId
+          ? { ...prefixThread, resumeCursor: { ...prefixThread.resumeCursor, resumeSessionAt: oldRecord.nativeConversationHeadId } }
+          : prefixThread;
+        const prefixConversation = { ...conversation, threads: [savedPrefix] };
+        return planV2Thread({ conversation: prefixConversation, resume: prefixCanResume }, savedPrefix, paths,
+          oldRecord.projectId, false, providerInstance, {
+            threadId: oldRecord.threadId,
+            identitySeed: oldRecord.identitySeed || oldRecord.sourceKey,
+            disableResume: !prefixCanResume,
+          });
+      },
+    });
+    if (proof.status === "conflict") {
+      return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
+        result: item(thread, "history-conflict", oldRecords, `${proof.reason} Preserve it and resolve the conflict before replacing.`) };
+    }
+    const event = proof.binding === "absent"
+      ? proof.prefixPlan.events.find((candidateEvent) => candidateEvent.type === "provider-thread.updated")
+      : undefined;
+    if (proof.binding === "absent" && !event) {
+      return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
+        result: item(thread, "history-conflict", oldRecords, "The converted task has an unexpected provider binding state. Preserve it and resolve the conflict before replacing.") };
+    }
+    upgradedPrefix = { plan: proof.prefixPlan, expectedSnapshot: proof.expectedSnapshot, ...(event ? { event } : {}), attach: proof.binding === "absent" };
+  }
   if (!binding || !providerInstance || binding.status !== "idle") {
-    return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
+    if (!upgradedPrefix) return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
       result: item(thread, "active-source", oldRecords, "The imported provider session is active or its native binding cannot be verified.") };
   }
-  const canContinue = oldRecord.resumable && binding.nativeThreadRef != null;
+  const canContinue = upgradedPrefix
+    ? oldRecord.resumable
+    : oldRecord.resumable && binding!.nativeThreadRef != null;
   const selection = { conversation, resume: canContinue };
   const currentPlan = planV2Thread(selection, thread, paths, oldRecord.projectId, false, providerInstance, {
     threadId: oldRecord.threadId, identitySeed: oldRecord.identitySeed || oldRecord.sourceKey,
     disableResume: !canContinue,
   });
-  if (!marker && liveNative(source) && !strictEventOwnership(source, currentPlan.events)) {
+  if (!marker && !upgradedPrefix && liveNative(source) && !strictEventOwnership(source, currentPlan.events)) {
     return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
       result: item(thread, "history-conflict", oldRecords, "The native event stream is not the deterministic t3-import history owned by this ledger record.") };
   }
   const priorView = { exists: true, thread: projectedThread(source), records: projectedRecords(source) };
-  const historyVerified = marker ? verifiedNativePrefix(source, oldRecord, currentPlan.events)
+  const historyVerified = upgradedPrefix ? true : marker ? verifiedNativePrefix(source, oldRecord, currentPlan.events)
     : projectedHistoryMatches(priorView.records, currentPlan.events);
   const unchanged = currentPlan.resumable === canContinue
     && historyVerified
-    && nativeBinding(source)?.providerInstanceId === currentPlan.provider.instanceId
-    && (canContinue
-      ? binding.nativeThreadRef?.nativeId === (thread.source === "claude" ? thread.sourceSessionId : String(thread.resumeCursor?.threadId ?? thread.sourceSessionId))
-        && (thread.source !== "claude" || binding.nativeConversationHeadRef?.nativeId === thread.resumeCursor?.resumeSessionAt)
-      : binding.nativeThreadRef === null && binding.nativeConversationHeadRef === null);
-  if (unchanged && liveNative(source)) {
+    && (upgradedPrefix || nativeBinding(source)?.providerInstanceId === currentPlan.provider.instanceId)
+    && (upgradedPrefix ? true : canContinue
+      ? binding!.nativeThreadRef?.nativeId === (thread.source === "claude" ? thread.sourceSessionId : String(thread.resumeCursor?.threadId ?? thread.sourceSessionId))
+        && (thread.source !== "claude" || binding!.nativeConversationHeadRef?.nativeId === thread.resumeCursor?.resumeSessionAt)
+      : binding!.nativeThreadRef === null && binding!.nativeConversationHeadRef === null);
+  if (!upgradedPrefix && unchanged && liveNative(source)) {
     return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId, recoverLedger: true,
       result: item(thread, "already-current", oldRecords) };
   }
@@ -316,7 +390,7 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
   result.events = planned.events.length + oldRecords.filter((record) => liveNative(nativeById.get(record.threadId))).length;
   result.attachments = planned.attachments;
   result.resumeTransferred = planned.resumable;
-  return { conversation, thread, oldRecord, oldRecords, planned, oldThreads, replacementId: newThreadId, result };
+  return { conversation, thread, oldRecord, oldRecords, planned, oldThreads, ...(upgradedPrefix ? { upgradedPrefix } : {}), replacementId: newThreadId, result };
 }
 
 export async function inspectNightlyV2Replacement(
@@ -440,6 +514,37 @@ export async function replaceNightlyV2(
   }
   for (const plan of writable) {
     const planned = plan.planned!;
+    if (plan.upgradedPrefix?.attach) {
+      verifyOrRecoverV2Assets(plan.upgradedPrefix.plan, paths, true, materializeAssets);
+      const attached = await callV2Native(paths, {
+        op: "attach-upgraded-binding",
+        threadId: plan.oldRecord!.threadId,
+        projectId: plan.oldRecord!.projectId,
+        providerInstanceId: String(projectedThread(plan.oldThreads?.[0])?.providerInstanceId ?? ""),
+        expectedSnapshot: plan.upgradedPrefix.expectedSnapshot,
+        event: plan.upgradedPrefix.event,
+      });
+      if (!attached.ok || (attached.outcome !== "attached" && attached.outcome !== "already-attached")) {
+        plan.result = conflictResult(plan, `The converted task binding changed during recovery (${attached.reason ?? attached.error ?? "native attach conflict"}).`);
+        continue;
+      }
+      const refreshed = await inspect(paths, plan.oldRecords.map((record) => record.threadId));
+      if (!refreshed.ok || refreshed.integrity !== "ok") {
+        plan.result = conflictResult(plan, "The converted task was attached, but the native readback could not confirm its source binding. The backup is preserved.");
+        continue;
+      }
+      const refreshedById = new Map((refreshed.threads ?? []).map((value) => [value.threadId, value as NativeThread]));
+      plan.oldThreads = plan.oldRecords.map((record) => refreshedById.get(record.threadId)).filter((value): value is NativeThread => Boolean(value));
+      const source = plan.oldThreads[0];
+      const binding = nativeBinding(source);
+      const shell = projectedThread(source);
+      if (plan.oldThreads.length !== plan.oldRecords.length || !liveNative(source) || !binding
+        || binding.status !== "idle" || binding.appThreadId !== plan.oldRecord!.threadId
+        || binding.providerInstanceId !== shell?.providerInstanceId) {
+        plan.result = conflictResult(plan, "The converted task was attached, but its native readback does not show the exact idle source binding. The backup is preserved.");
+        continue;
+      }
+    }
     const oldBindingList = oldBindings(plan);
     if (oldBindingList.some((binding) => !binding.providerThreadId)) {
       plan.result = conflictResult(plan, "The source provider binding is missing or inconsistent; no replacement was written.");
