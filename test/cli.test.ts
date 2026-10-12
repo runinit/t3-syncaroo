@@ -57,6 +57,33 @@ describe("global target options", () => {
     expect(result.stdout).toMatch(/--db <path>\s+T3 state database path/u);
   });
 
+  it("doctor distinguishes Claude sidechains from unreadable main transcripts", () => {
+    const root = mkdtempSync(join(tmpdir(), "t3-import-cli-doctor-sidechain-"));
+    const project = join(root, "claude", "projects", "fixture");
+    mkdirSync(project, { recursive: true });
+    const sessionId = "11111111-2222-4333-8444-555555555555";
+    const row = { sessionId, cwd: root, uuid: "user", type: "user", isSidechain: false, timestamp: "2026-01-01T00:00:00Z", message: { content: "main prompt" } };
+    writeFileSync(join(project, `${sessionId}.jsonl`), `${JSON.stringify(row)}\n`);
+    writeFileSync(join(project, "agent-child.jsonl"), `${JSON.stringify({ ...row, uuid: "child", isSidechain: true })}\n`);
+    writeFileSync(join(project, "broken.jsonl"), "{broken json\n");
+    const target = createTarget(join(root, "t3"));
+
+    const result = cli(["--t3-home", target.t3Home, "doctor", "--json"], {
+      ...process.env,
+      CLAUDE_CONFIG_DIR: join(root, "claude"),
+      CODEX_HOME: join(root, "missing-codex-home"),
+      CODEX_BIN: join(root, "missing-codex-bin"),
+    });
+    expect(result.status).toBe(0);
+    const payload = JSON.parse(result.stdout) as { sources: { claude: { available: boolean; conversations: number; outcomes: Array<{ sessionId?: string; displayName: string; outcome: { kind: string; code: string } }> } } };
+    expect(payload.sources.claude).toMatchObject({ available: true, conversations: 1 });
+    expect(payload.sources.claude.outcomes).toEqual([
+      expect.objectContaining({ displayName: "agent-child.jsonl", outcome: expect.objectContaining({ kind: "unsupported", code: "claude-sidechain-session" }) }),
+      expect.objectContaining({ displayName: "broken.jsonl", outcome: expect.objectContaining({ kind: "failed", code: "source-unreadable" }) }),
+    ]);
+    expect(payload.sources.claude.outcomes[0]?.sessionId).toBeUndefined();
+  });
+
   it("includes unsupported source files and recovery text in JSON discovery", () => {
     const home = mkdtempSync(join(tmpdir(), "t3-import-cli-discovery-"));
     const sessions = join(home, "sessions");

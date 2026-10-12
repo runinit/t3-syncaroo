@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, readFileSync, realpathSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -108,6 +108,56 @@ describe("source adapters", () => {
       displayName: "unreadable.jsonl",
       outcome: expect.objectContaining({ kind: "failed", phase: "discovery", code: "source-unreadable", nextAction: expect.any(String) }),
     })]);
+  });
+
+  it("classifies valid Claude sidechain transcripts separately from unreadable sessions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-claude-sidechain-outcomes-"));
+    const workspace = join(root, "workspace");
+    const project = join(root, "projects", "fixture");
+    mkdirSync(project, { recursive: true });
+    process.env.CLAUDE_CONFIG_DIR = root;
+    const sessionId = "66666666-6666-4666-8666-666666666666";
+    const childRow = { sessionId, cwd: workspace, isSidechain: true, uuid: "child-user", parentUuid: null, type: "user", timestamp: "2026-01-01T00:00:00Z", message: { content: "child prompt" } };
+    jsonl(join(project, `${sessionId}.jsonl`), [
+      { ...childRow, isSidechain: false, uuid: "user", message: { content: "main prompt" } },
+    ]);
+    jsonl(join(project, "agent-child.jsonl"), [childRow]);
+    // Classification follows the contents rather than the agent filename.
+    jsonl(join(project, "sidechain.jsonl"), [childRow]);
+    writeFileSync(join(project, "agent-unreadable.jsonl"), "{broken json\n");
+
+    const discovered = await new ClaudeSource().discoverWithOutcomes({ workspace });
+    expect(discovered.summaries.map((summary) => summary.id)).toEqual([sessionId]);
+    const sidechains = discovered.outcomes.filter((item) => item.outcome.code === "claude-sidechain-session");
+    expect(sidechains.map((item) => item.displayName)).toEqual(["agent-child.jsonl", "sidechain.jsonl"]);
+    for (const item of sidechains) {
+      expect(item).toMatchObject({ source: "claude", workspace, outcome: { kind: "unsupported", phase: "discovery", nextAction: expect.stringContaining("main Claude conversation") } });
+      // A child's sessionId is its parent's identity, not an additional failed selection.
+      expect(item.sessionId).toBeUndefined();
+    }
+    expect(discovered.outcomes.filter((item) => item.outcome.kind === "failed")).toEqual([
+      expect.objectContaining({ displayName: "agent-unreadable.jsonl", outcome: expect.objectContaining({ code: "source-unreadable" }) }),
+    ]);
+  });
+
+  it("filters Claude sidechain diagnostics by workspace and date", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-claude-sidechain-filters-"));
+    const workspace = join(root, "workspace");
+    const otherWorkspace = join(root, "other-workspace");
+    const project = join(root, "projects", "fixture");
+    mkdirSync(project, { recursive: true });
+    process.env.CLAUDE_CONFIG_DIR = root;
+    const row = { sessionId: "parent-session", cwd: workspace, isSidechain: true, uuid: "child", type: "user", timestamp: "2026-01-01T00:00:00Z", message: { content: "child prompt" } };
+    jsonl(join(project, "agent-current.jsonl"), [row]);
+    jsonl(join(project, "agent-other.jsonl"), [{ ...row, cwd: otherWorkspace }]);
+    jsonl(join(project, "agent-old.jsonl"), [{ ...row, timestamp: "2025-01-01T00:00:00Z" }]);
+    utimesSync(join(project, "agent-old.jsonl"), new Date("2025-01-01T00:00:00Z"), new Date("2025-01-01T00:00:00Z"));
+
+    const discovered = await new ClaudeSource().discoverWithOutcomes({ workspace, since: new Date("2026-01-01T00:00:00Z") });
+    expect(discovered.summaries).toEqual([]);
+    expect(discovered.outcomes).toEqual([
+      expect.objectContaining({ displayName: "agent-current.jsonl", outcome: expect.objectContaining({ kind: "unsupported", code: "claude-sidechain-session" }) }),
+    ]);
   });
 
   it("reports a provider history folder that cannot be traversed", async () => {

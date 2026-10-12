@@ -112,7 +112,7 @@ When `--json` is active, stdout contains one versioned JSON value and diagnostic
 
 ## Source behavior
 
-Codex discovery prefers the normalized `codex app-server` API and augments it with rollout JSONL; it falls back to rollout files when app-server is unavailable. Claude discovery streams project JSONL and reconstructs its UUID graph. Automatic compaction roots are reconnected through validated `logicalParentUuid` links, and unambiguous successful API-retry forks are linearized while retaining their retry activity. Genuine alternate Claude leaves that remain become separate historical T3 tasks; only the current leaf receives a resume binding.
+Codex discovery prefers the normalized `codex app-server` API and augments it with rollout JSONL; it falls back to rollout files when app-server is unavailable. Claude discovery streams project JSONL and reconstructs its UUID graph. Claude transcripts containing only subagent sidechain history are reported as unsupported standalone conversations, rather than unreadable files; import the main conversation instead. Automatic compaction roots are reconnected through validated `logicalParentUuid` links, and unambiguous successful API-retry forks are linearized while retaining their retry activity. Genuine alternate Claude leaves that remain become separate historical T3 tasks; only the current leaf receives a resume binding.
 
 Injected system/developer/environment envelopes and encrypted reasoning blobs are excluded. Visible messages, reasoning summaries, plans, tools, usage, compaction, resolved approvals/input, and supported images are mapped to T3-compatible events.
 

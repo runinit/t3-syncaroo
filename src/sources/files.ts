@@ -34,6 +34,9 @@ export function discoveryOutcome(
   } else if (code === "child-session-contained-by-parent") {
     message = "This Codex child session is represented by its parent conversation and is not imported separately.";
     nextAction = "Import the parent conversation to include its supported child-session history.";
+  } else if (code === "claude-sidechain-session") {
+    message = "This Claude transcript contains only subagent sidechain history, which is not supported as a standalone conversation.";
+    nextAction = "Import the main Claude conversation instead; standalone subagent transcripts are not supported.";
   } else if (code === "source-changed-during-read") {
     message = "The source file changed while it was being read.";
     nextAction = "Wait for the provider to finish writing the session, then rediscover and retry.";

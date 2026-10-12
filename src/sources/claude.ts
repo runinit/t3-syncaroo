@@ -44,6 +44,12 @@ interface ClaudeMetadata {
   gitBranch?: string;
 }
 
+class ClaudeSidechainTranscriptError extends Error {
+  constructor(readonly workspace: string, readonly updatedAt: string) {
+    super("Claude transcript contains only sidechain history");
+  }
+}
+
 function claudeRoot(): string {
   return process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), ".claude");
 }
@@ -281,6 +287,7 @@ function analyze(rows: unknown[], fallbackTime: string): ClaudeMetadata {
   reconnectCompactBoundaries(nodes);
   reconnectSuccessfulRetries(nodes);
   const mainNodes = [...nodes.values()].filter((node) => !node.sidechain);
+  if (nodes.size > 0 && mainNodes.length === 0) throw new ClaudeSidechainTranscriptError(workspace, updatedAt);
   const referenced = new Set(mainNodes.flatMap((node) => node.parentUuid ? [node.parentUuid] : []));
   const physicalLeaves = mainNodes.filter((node) => !referenced.has(node.uuid));
   const endpointById = new Map<string, ClaudeNode>();
@@ -566,7 +573,15 @@ export class ClaudeSource implements SourceAdapter {
         if (options.since && new Date(metadata.updatedAt) < options.since) continue;
         summaries.push({ source: "claude", id: metadata.sessionId, title: metadata.title, workspace: metadata.workspace, path, createdAt: metadata.createdAt, updatedAt: metadata.updatedAt, status: metadata.currentLeaf.type === "assistant" ? "complete" : "incomplete", branches: metadata.leaves.length });
       } catch (error) {
-        outcomes.push(discoveryOutcome("claude", path, sourceFileErrorCode(error)));
+        if (error instanceof ClaudeSidechainTranscriptError) {
+          if (options.workspace && canonicalPath(error.workspace) !== canonicalPath(options.workspace)) continue;
+          if (options.since && new Date(error.updatedAt) < options.since) continue;
+          // Subagent files share the parent's sessionId. Do not classify that
+          // parent as an unsupported selection when its main file is valid.
+          outcomes.push(discoveryOutcome("claude", path, "claude-sidechain-session", "unsupported", undefined, error.workspace));
+        } else {
+          outcomes.push(discoveryOutcome("claude", path, sourceFileErrorCode(error)));
+        }
       }
     }
     summaries.sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
