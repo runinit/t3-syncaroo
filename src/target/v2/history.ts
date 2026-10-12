@@ -18,6 +18,7 @@ export interface EncodedV2History {
 }
 
 type ProjectedHistoryRecords = {
+  messages?: Array<Record<string, unknown>>;
   turnItems?: Array<Record<string, unknown>>;
   plans?: Array<Record<string, unknown>>;
 };
@@ -32,7 +33,25 @@ export function projectedHistoryMatches(
   expectedEvents: Array<Record<string, unknown>>,
   options: { identity?: "exact" | "semantic" } = {},
 ): boolean {
-  if (!records?.turnItems || !records.plans) return false;
+  if (!records?.messages || !records.turnItems || !records.plans) return false;
+  const expectedMessages = expectedEvents
+    .filter((event) => event.type === "message.updated")
+    .map((event) => event.payload as Record<string, unknown>);
+  if (records.messages.length !== expectedMessages.length) return false;
+  if (options.identity === "semantic") {
+    const ignoredMessageIdentityFields = new Set(["id", "threadId"]);
+    if (!expectedMessages.every((expected, index) => {
+      const actual = records.messages![index];
+      return Boolean(actual && Object.entries(expected).every(([key, item]) =>
+        ignoredMessageIdentityFields.has(key) || sameProjectedValue(actual[key], item)));
+    })) return false;
+  } else {
+    const actualMessages = new Map(records.messages.map((message) => [message.id, message]));
+    if (!expectedMessages.every((expected) => {
+      const actual = actualMessages.get(expected.id);
+      return Boolean(actual && Object.entries(expected).every(([key, item]) => sameProjectedValue(actual[key], item)));
+    })) return false;
+  }
   const expectedItems = expectedEvents
     .filter((event) => event.type === "turn-item.updated")
     .map((event) => event.payload as Record<string, unknown>);
