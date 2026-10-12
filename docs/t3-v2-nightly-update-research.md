@@ -6,8 +6,9 @@ upstream tag to commit
 Baseline is `0.0.46-nightly.20261011.2980`, commit
 [`ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e`](https://github.com/pingdotgg/t3code/commit/ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e).
 This is a bounded source comparison to update the earlier
-[t3-v2 support research](t3-v2-support-research.md); it does not change the
-approved target pin or implementation spec.
+[t3-v2 support research](t3-v2-support-research.md). The user has now approved
+`.2994` as the implementation target. The earlier `.2980` proof remains
+historical evidence and is not runtime or GUI acceptance for `.2994`.
 
 ## Verdict
 
@@ -69,11 +70,11 @@ Re-review the selected integration seam against 2994 before coding.
 
 ## Implementation implications and proof still needed
 
-**Proposal:** retain the 2980 report's pinned EventSink/schema design as the
-candidate 2994 implementation baseline, but pin the implementation explicitly
-to 2994 if that becomes the approved target. Keep provider continuation testing
-separate from transcript projection testing. For any helper using thread
-management, provide settings and receipt-store layers and test both enabled and
+**Implementation direction:** use the `.2994` source commit above as the
+implementation baseline while retaining the `.2980` EventSink/schema findings
+only where the source comparison confirms they remain unchanged. Keep provider
+continuation testing separate from transcript projection testing. For any helper
+using thread management, provide settings and receipt-store layers and test both enabled and
 disabled instances, including receipt replay and queued continuation. Keep
 T3's provider enablement semantics intact; importing settled history should not
 silently launch a provider turn.

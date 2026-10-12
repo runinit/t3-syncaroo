@@ -8,7 +8,7 @@ startup. The native integration and packaging remain to be proven in isolation.
 
 ## Problem Statement
 
-The user's installed T3 Code `0.0.46-nightly.20261011.2980` uses v2 storage that
+The user's installed T3 Code `0.0.46-nightly.20261011.2994` uses v2 storage that
 t3-import rejects. Writing to the legacy database would not update the user's
 current T3 history. The built-in T3 importer has narrower history support and
 reported 121 imported threads and 206 unsuccessful threads without individual

@@ -6,6 +6,11 @@ Status: implementation design for the exact T3 Code nightly source commit
 [the support specification](t3-v2-support-spec.md) and
 [source research](t3-v2-support-research.md).
 
+Historical design baseline for `.2980`. The approved implementation target is
+now `.2994`; use [the nightly comparison](t3-v2-nightly-update-research.md)
+for source changes, and do not treat the earlier proof as `.2994` runtime
+acceptance.
+
 ## Decision
 
 Add a separate v2 target adapter that translates the importer's existing

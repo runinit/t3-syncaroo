@@ -1,5 +1,8 @@
 # Installed T3 Code Electron profile path
 
+Historical installed-bundle evidence for `.2980` only. The approved target is
+now `.2994`; this inspection is not `.2994` GUI acceptance.
+
 The installed AppImage is T3 Code `0.0.46-nightly.20261011.2980`, built from
 commit [`ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e`](https://github.com/pingdotgg/t3code/commit/ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e).
 The AppImage's `resources/app.asar/package.json` reports that exact version and

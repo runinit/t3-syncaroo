@@ -1,7 +1,10 @@
 # Research: t3-import support for T3 Code 0.0.46 nightly
 
-Research target: T3 Code `0.0.46-nightly.20261011.2980`, source commit
+Historical research baseline: T3 Code `0.0.46-nightly.20261011.2980`, source commit
 [`ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e`](https://github.com/pingdotgg/t3code/commit/ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e).
+The approved implementation target is now `.2994`; see
+[the bounded nightly comparison](t3-v2-nightly-update-research.md). This report
+does not establish runtime acceptance for `.2994`.
 The user-approved scope and acceptance scenarios are in
 [t3-v2-support-spec.md](t3-v2-support-spec.md) and
 [t3-v2-support.md](t3-v2-support.md). This report separates source-verified facts

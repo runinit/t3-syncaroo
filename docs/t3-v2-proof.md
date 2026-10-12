@@ -4,6 +4,9 @@ Run date: 2026-10-11. Target T3 Code source commit:
 [`ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e`](https://github.com/pingdotgg/t3code/tree/ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e),
 the source pinned for `0.0.46-nightly.20261011.2980`.
 
+Historical proof for `.2980` only. The approved implementation target is now
+`.2994`; this result does not establish `.2994` runtime acceptance.
+
 ## Result
 
 **Pass for the native persistence boundary.** The proof opened a marked synthetic

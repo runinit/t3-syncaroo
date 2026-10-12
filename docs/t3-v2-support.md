@@ -8,7 +8,10 @@ Pinned source findings and the proposed proof are in
 
 ## Agreed scope
 
-- Target T3 Code `0.0.46-nightly.20261011.2980` initially.
+- Approved target T3 Code `0.0.46-nightly.20261011.2994`, source commit
+  `d07a07f33c0a1b317dea6234636976231c3688b5`. The earlier `.2980` proof and
+  installed-profile investigation remain historical evidence, not `.2994`
+  runtime or GUI acceptance.
 - Preserve the current feature set for both Codex and Claude Code: history import,
   eligible session continuation, synchronization, replacement, attachments, and
   backup/recovery protections.
