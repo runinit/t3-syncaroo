@@ -139,28 +139,34 @@ type NativeProjectionMarker = { kind: "semantic-native-prefix-v1"; messages: str
 function nativeProjectionMarker(record: StoredLedgerRecord): NativeProjectionMarker | undefined {
   const marker = (record.checkpoint as unknown as { nativeProjection?: NativeProjectionMarker } | undefined)?.nativeProjection;
   return marker?.kind === "semantic-native-prefix-v1" && Array.isArray(marker.messages)
-    && Array.isArray(marker.turnItems) && Array.isArray(marker.plans) ? marker : undefined;
+    && marker.messages.every((id) => typeof id === "string")
+    && Array.isArray(marker.turnItems) && marker.turnItems.every((id) => typeof id === "string")
+    && Array.isArray(marker.plans) && marker.plans.every((id) => typeof id === "string") ? marker : undefined;
 }
 
 function verifiedNativePrefix(value: NativeThread | undefined, record: StoredLedgerRecord, expectedEvents: Array<Record<string, unknown>>): boolean {
   const marker = nativeProjectionMarker(record);
   const records = projectedRecords(value);
   if (!marker || !records?.messages || !records.turnItems || !records.plans) return false;
-  const groups: Array<[Array<Record<string, any>>, string[]]> = [
-    [records.messages, marker.messages],
-    [records.turnItems, marker.turnItems],
-    [records.plans, marker.plans],
+  const expectedMessages = expectedEvents.filter((event) => event.type === "message.updated").map((event) => event.payload as Record<string, any>);
+  const expectedItems = expectedEvents.filter((event) => event.type === "turn-item.updated").map((event) => event.payload as Record<string, any>);
+  const expectedPlans = expectedEvents.filter((event) => event.type === "plan.updated").map((event) => event.payload as Record<string, any>);
+  const groups: Array<[Array<Record<string, any>>, string[], Array<Record<string, any>>]> = [
+    [records.messages, marker.messages, expectedMessages],
+    [records.turnItems, marker.turnItems, expectedItems],
+    [records.plans, marker.plans, expectedPlans],
   ];
-  if (groups.some(([actual, ids]) => actual.length !== ids.length || actual.some((row, index) => row.id !== ids[index]))) return false;
-  const counts = new Map<string, number>([["message.updated", marker.messages.length], ["turn-item.updated", marker.turnItems.length], ["plan.updated", marker.plans.length]]);
-  const expectedPrefix = expectedEvents.filter((event) => {
-    const count = counts.get(String(event.type)) ?? 0;
-    if (count < 1) return false;
-    counts.set(String(event.type), count - 1);
-    return true;
+  if (groups.some(([actual, ids, expected]) => ids.length > expected.length || actual.length !== expected.length
+    || actual.slice(0, ids.length).some((row, index) => row.id !== ids[index])
+    || !expected.slice(ids.length).every((row, offset) => actual[ids.length + offset]?.id === row.id))) return false;
+  if (!projectedHistoryMatches(records, expectedEvents, { identity: "semantic" })) return false;
+  return expectedItems.every((expected, index) => {
+    if (typeof expected.messageId !== "string") return true;
+    const messageIndex = expectedMessages.findIndex((message) => message.id === expected.messageId);
+    if (messageIndex < 0) return true;
+    const expectedMessageId = messageIndex < marker.messages.length ? marker.messages[messageIndex] : expectedMessages[messageIndex]!.id;
+    return records.turnItems![index]?.messageId === expectedMessageId;
   });
-  if ([...counts.values()].some((count) => count !== 0)) return false;
-  return projectedHistoryMatches(records, expectedPrefix, { identity: "semantic" });
 }
 
 function nativeBinding(value: NativeThread | undefined): Record<string, any> | undefined {
@@ -458,19 +464,26 @@ export async function replaceNightlyV2(
       assets.cleanup();
       try {
         const after = await inspect(paths, [planned.threadId]);
-        if (!after.threads?.find((value) => value.threadId === planned.threadId)?.snapshot?.projection?.thread) {
+        const target = after.threads?.find((value) => value.threadId === planned.threadId);
+        if (after.ok === true && after.integrity === "ok" && target?.exists === false) {
           for (const path of assets.created) rmSync(path, { force: true });
         }
       } catch { /* Keep assets if native commit state cannot be confirmed. */ }
       throw writeError(`Replacement failed. The verified backup is ${backup}. ${error instanceof Error ? error.message : String(error)}`, error);
     }
     assets.cleanup();
-    if (!response.ok || (response.outcome !== "replaced" && response.outcome !== "already-replaced")) {
-      if (response.outcome === "replace-conflict") {
-        const check = await inspect(paths, [planned.threadId]);
-        if (!check.threads?.find((value) => value.threadId === planned.threadId)?.snapshot?.projection?.thread) {
+    const cleanupUncommittedAssets = async () => {
+      try {
+        const after = await inspect(paths, [planned.threadId]);
+        const target = after.threads?.find((value) => value.threadId === planned.threadId);
+        if (after.ok === true && after.integrity === "ok" && target?.exists === false) {
           for (const path of assets.created) rmSync(path, { force: true });
         }
+      } catch { /* Keep files if the commit state cannot be confirmed. */ }
+    };
+    if (!response.ok || (response.outcome !== "replaced" && response.outcome !== "already-replaced")) {
+      await cleanupUncommittedAssets();
+      if (response.outcome === "replace-conflict") {
         plan.result = conflictResult(plan, response.error ?? "Native replacement identity checks failed.");
         continue;
       }
