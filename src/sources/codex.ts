@@ -34,6 +34,13 @@ import { CodexAppServerSession, type CodexThreadMetadata } from "./codexAppServe
 const SYNTHETIC_PREFIXES = ["<recommended_plugins>", "<environment_context>", "<app-context>", "<permissions instructions>"];
 const CODEX_MANUAL_CONTEXT_PREFIX = "Context handoff (manual_context):";
 
+function isCodexManualContextHandoff(text: string): boolean {
+  const lines = text.split(/\r?\n/u);
+  return lines[0] === CODEX_MANUAL_CONTEXT_PREFIX
+    && /^Provider context handoff\. Thread: \S+/u.test(lines[1] ?? "")
+    && lines.some((line) => line.startsWith("Recover omitted history using t3_thread_read("));
+}
+
 interface PendingTurn {
   id: string;
   startedAt: string;
@@ -350,7 +357,7 @@ function parseRows(
       if (role !== "user" && role !== "assistant") continue;
       const parsed = textParts(payload.content, role);
       if (!parsed.text && parsed.attachments.length === 0) continue;
-      if (role === "user" && parsed.text.startsWith(CODEX_MANUAL_CONTEXT_PREFIX)) {
+      if (role === "user" && !active && isCodexManualContextHandoff(parsed.text)) {
         manualContextPrelude = true;
         continue;
       }

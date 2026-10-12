@@ -221,8 +221,12 @@ describe("source adapters", () => {
       row(8, "response_item", { type: "message", role: "user", id: "resumed-user", content: [{ type: "input_text", text: "Reply exactly CONTINUED_CODEX_OK." }] }),
       row(9, "response_item", { type: "message", role: "assistant", id: "resumed-assistant", content: [{ type: "output_text", text: "CONTINUED_CODEX_OK" }] }),
       row(10, "event_msg", { type: "task_complete", turn_id: "resumed" }),
-      row(11, "event_msg", { type: "task_started", turn_id: "still-active" }),
-      row(11, "response_item", { type: "message", role: "user", id: "active-user", content: [{ type: "input_text", text: "Leave this genuinely unfinished" }] }),
+      row(11, "event_msg", { type: "task_started", turn_id: "quoted-prefix" }),
+      row(11, "response_item", { type: "message", role: "user", id: "quoted-prefix-user", content: [{ type: "input_text", text: "Context handoff (manual_context): this is ordinary quoted text." }] }),
+      row(12, "response_item", { type: "message", role: "assistant", id: "quoted-prefix-assistant", content: [{ type: "output_text", text: "I will treat that as quoted text." }] }),
+      row(13, "event_msg", { type: "task_complete", turn_id: "quoted-prefix" }),
+      row(14, "event_msg", { type: "task_started", turn_id: "still-active" }),
+      row(14, "response_item", { type: "message", role: "user", id: "active-user", content: [{ type: "input_text", text: "Leave this genuinely unfinished" }] }),
     ]);
 
     const adapter = new CodexSource();
@@ -232,10 +236,41 @@ describe("source adapters", () => {
     expect(thread.turns.map((turn) => [turn.id, turn.status, turn.user.text])).toEqual([
       ["prior", "completed", "Ordinary prior prompt"],
       ["resumed", "completed", "Reply exactly CONTINUED_CODEX_OK."],
+      ["quoted-prefix", "completed", "Context handoff (manual_context): this is ordinary quoted text."],
     ]);
     expect(thread.ignoredInProgressTurns).toBe(1);
     const withActive = await adapter.load(summary, { includeIncomplete: true });
     expect(withActive.threads[0]!.turns.at(-1)).toMatchObject({ id: "still-active", status: "inProgress", user: { text: "Leave this genuinely unfinished" } });
+    await adapter.dispose();
+  });
+
+  it("preserves a malformed manual-context-like user message as an incomplete source turn", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-codex-malformed-manual-context-"));
+    const workspace = join(root, "workspace");
+    const sessions = join(root, "sessions", "2026", "10", "11");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(sessions, { recursive: true });
+    process.env.CODEX_HOME = root;
+    process.env.CODEX_BIN = join(root, "missing-codex-executable");
+    const sessionId = "66666666-7777-4888-9999-000000000001";
+    jsonl(join(sessions, `rollout-${sessionId}.jsonl`), [
+      { timestamp: "2026-10-11T21:00:00Z", type: "session_meta", payload: { id: sessionId, cwd: workspace } },
+      { timestamp: "2026-10-11T21:00:01Z", type: "event_msg", payload: { type: "task_started", turn_id: "prior" } },
+      { timestamp: "2026-10-11T21:00:01Z", type: "response_item", payload: { type: "message", role: "user", id: "prior-user", content: [{ type: "input_text", text: "Prior prompt" }] } },
+      { timestamp: "2026-10-11T21:00:02Z", type: "response_item", payload: { type: "message", role: "assistant", id: "prior-assistant", content: [{ type: "output_text", text: "Prior answer" }] } },
+      { timestamp: "2026-10-11T21:00:03Z", type: "event_msg", payload: { type: "task_complete", turn_id: "prior" } },
+      { timestamp: "2026-10-11T21:00:04Z", type: "response_item", payload: { type: "message", role: "user", id: "malformed-handoff", content: [{ type: "input_text", text: "Context handoff (manual_context):\nThis is only a quoted label, without the provider context handoff or recovery instruction." }] } },
+    ]);
+
+    const adapter = new CodexSource();
+    const summary = (await adapter.discover({ workspace }))[0]!;
+    const conversation = await adapter.load(summary, { includeIncomplete: true });
+    const thread = conversation.threads[0]!;
+    expect(thread.turns.at(-1)).toMatchObject({
+      status: "inProgress",
+      user: { text: "Context handoff (manual_context):\nThis is only a quoted label, without the provider context handoff or recovery instruction." },
+    });
+    expect(thread.ignoredInProgressTurns).toBe(1);
     await adapter.dispose();
   });
 
