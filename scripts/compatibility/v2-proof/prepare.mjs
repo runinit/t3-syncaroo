@@ -5,8 +5,8 @@ import { spawnSync } from "node:child_process";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(here, "../../..");
-const sourceCommit = "ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e";
-const t3Root = resolve(projectRoot, `artifacts/t3-reference/t3code-${sourceCommit}`);
+const sourceCommit = "d07a07f33c0a1b317dea6234636976231c3688b5";
+const t3Root = resolve(projectRoot, `artifacts/t3-reference-2994/t3code-${sourceCommit}`);
 const rawBase = `https://raw.githubusercontent.com/pingdotgg/t3code/${sourceCommit}`;
 
 async function fetchPinned(relative, destination) {
@@ -31,7 +31,7 @@ for (const patchPath of patchPaths) {
   }
 }
 
-const localTarball = "apps/mobile/deps/react-native-screens-5.0.0-t3.17.tgz";
+const localTarball = "apps/mobile/deps/react-native-screens-5.0.0-t3.24.tgz";
 try {
   await stat(resolve(t3Root, localTarball));
 } catch {

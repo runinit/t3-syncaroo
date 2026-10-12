@@ -8,15 +8,15 @@ import * as DateTime from 'effect/DateTime';
 import * as Option from 'effect/Option';
 import * as Schema from 'effect/Schema';
 import * as SqlClient from 'effect/sql/SqlClient';
-import { CommandId, ProjectId, ThreadId, ProviderThreadId, MessageId, TurnItemId, EventId } from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/src/baseSchemas.ts';
-import { ProviderInstanceId, ProviderDriverKind } from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/src/providerInstance.ts';
-import * as EventSink from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/src/orchestration-v2/EventSink.ts';
-import * as EventStore from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/src/orchestration-v2/EventStore.ts';
-import * as ProjectionStore from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/src/orchestration-v2/ProjectionStore.ts';
-import * as ProjectStore from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/src/orchestration-v2/ProjectStore.ts';
-import { ApplicationProjectEvent } from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/src/applicationEvent.ts';
-import { OrchestrationV2DomainEventJson } from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/src/orchestrationV2.ts';
-import * as SqliteClient from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/shared/src/nodeSqliteClient.ts';
+import { CommandId, ProjectId, ThreadId, ProviderThreadId, MessageId, TurnItemId, EventId } from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/packages/contracts/src/baseSchemas.ts';
+import { ProviderInstanceId, ProviderDriverKind } from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/packages/contracts/src/providerInstance.ts';
+import * as EventSink from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/apps/server/src/orchestration-v2/EventSink.ts';
+import * as EventStore from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/apps/server/src/orchestration-v2/EventStore.ts';
+import * as ProjectionStore from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/apps/server/src/orchestration-v2/ProjectionStore.ts';
+import * as ProjectStore from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/apps/server/src/orchestration-v2/ProjectStore.ts';
+import { ApplicationProjectEvent } from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/packages/contracts/src/applicationEvent.ts';
+import { OrchestrationV2DomainEventJson } from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/packages/contracts/src/orchestrationV2.ts';
+import * as SqliteClient from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/packages/shared/src/nodeSqliteClient.ts';
 
 const makeLayer = () => {
   const sql = SqliteClient.layer({ filename: dbPath });
@@ -35,6 +35,16 @@ function decodeEvents(input: unknown) {
   if (!Array.isArray(input) || input.length === 0) throw new Error('write requires a non-empty events array');
   return input.map((event) => Schema.decodeUnknownSync(OrchestrationV2DomainEventJson)(event));
 }
+
+function canonicalJson(value: any): string {
+  if (value && typeof value.toJSON === 'function') return canonicalJson(value.toJSON());
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).filter((key) => value[key] !== undefined).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
 
 function decodeProjectEvent(raw: any) {
   if (!raw || typeof raw !== 'object' || !raw.event || !raw.commandId || !raw.commandType || !raw.acceptedAt) {
@@ -68,10 +78,12 @@ async function inspect(request: any) {
     for (const rawId of request.threadIds ?? []) {
       const threadId = ThreadId.make(rawId);
       const shell = yield* projections.getThreadShell(threadId);
+      const snapshot = shell ? yield* projections.getThreadSnapshot(threadId) : undefined;
       const records = shell ? yield* projections.getThreadRecords(threadId, ['messages', 'turnItems', 'plans', 'providerThreads', 'providerTurns']) : undefined;
       const events = yield* eventStore.read({ threadId }).pipe(Stream.runCollect);
       threads.push({ threadId, exists: shell !== null,
-        ...(shell ? { thread: shell, records } : {}), events: events.map((stored: any) => ({ id: stored.event.id, sequence: stored.sequence })) });
+        ...(shell ? { thread: shell, records } : {}), ...(snapshot ? { snapshot } : {}),
+        events: events.map((stored: any) => ({ id: stored.event.id, sequence: stored.sequence })) });
     }
     return { ok: true, integrity: integrityRows[0]?.integrity_check ?? 'unknown',
       profile: { migrationRevision: migrations.at(-1)?.migrationId ?? 0,
@@ -117,6 +129,10 @@ async function writeRequest(request: any) {
     const sql = yield* SqlClient.SqlClient;
     const shell = yield* projections.getThreadShell(threadId);
     if (shell) return { outcome: 'existing-thread-conflict', thread: shell };
+    for (const event of events.filter((entry: any) => entry.type === 'provider-thread.updated') as any[]) {
+      const owners = yield* sql`SELECT thread_id FROM orchestration_v2_projection_provider_threads WHERE provider_thread_id = ${event.payload.id} LIMIT 1`;
+      if (owners.length) return { outcome: 'provider-thread-id-conflict', ownerThreadId: owners[0].thread_id };
+    }
     for (const id of ids) {
       const rows = yield* sql`SELECT event_id FROM orchestration_events WHERE event_id = ${id} LIMIT 1`;
       if (rows.length) throw new Error(`event ID already exists: ${id}`);
@@ -127,6 +143,9 @@ async function writeRequest(request: any) {
   if (existing.outcome === 'existing-thread-conflict') {
     return { ok: false, outcome: 'existing-thread-conflict', error: 'thread ID is already present; caller must validate project/source/history identity', existingThread: existing.thread };
   }
+  if (existing.outcome === 'provider-thread-id-conflict') {
+    return { ok: false, outcome: 'provider-thread-id-conflict', error: 'provider-thread ID is already owned by another projected thread', ownerThreadId: existing.ownerThreadId };
+  }
 
   if (project) {
     const existingProject = await run(Effect.gen(function* () {
@@ -136,6 +155,7 @@ async function writeRequest(request: any) {
     if (Option.isSome(existingProject)) throw new Error('projectEvent target already exists');
   }
   const result = await run(Effect.gen(function* () {
+    const sql = yield* SqlClient.SqlClient;
     const sink = yield* EventSink.EventSinkV2;
     let projectCommitted = false;
     if (project) {
@@ -143,10 +163,16 @@ async function writeRequest(request: any) {
       projectCommitted = committed.committed;
       if (!committed.committed) throw new Error('project command was not committed');
     }
-    const storedExit = yield* Effect.match(sink.write({ events }), {
-      onFailure: (error) => ({ _tag: 'Failure' as const, error }),
-      onSuccess: (stored) => ({ _tag: 'Success' as const, stored }),
-    });
+    const storedExit = yield* sql.withTransaction(Effect.gen(function* () {
+      for (const event of events.filter((entry: any) => entry.type === 'provider-thread.updated') as any[]) {
+        const owners = yield* sql`SELECT thread_id FROM orchestration_v2_projection_provider_threads WHERE provider_thread_id = ${event.payload.id} LIMIT 1`;
+        if (owners.length) return { _tag: 'Failure' as const, error: new Error('provider-thread-id-conflict') };
+      }
+      return yield* Effect.match(sink.write({ events }), {
+        onFailure: (error) => ({ _tag: 'Failure' as const, error }),
+        onSuccess: (stored) => ({ _tag: 'Success' as const, stored }),
+      });
+    }));
     if (storedExit._tag === 'Failure') {
       let projectCompensated = false;
       let compensationError: string | undefined;
@@ -168,7 +194,7 @@ async function writeRequest(request: any) {
           projectCompensated = compensation.committed;
         } catch (error) { compensationError = String(error); }
       }
-      return { ok: false, outcome: 'write-failed', error: String(storedExit.error), projectCommitted,
+      return { ok: false, outcome: String(storedExit.error).includes('provider-thread-id-conflict') ? 'provider-thread-id-conflict' : 'write-failed', error: String(storedExit.error), projectCommitted,
         projectCompensated, ...(compensationError ? { compensationError } : {}) };
     }
     const stored = storedExit.stored;
@@ -308,11 +334,362 @@ async function appendRequest(request: any) {
   return { ...result, threadId, projections: [{ threadId, ...readback }] };
 }
 
+const activeRunStatuses = new Set(['preparing', 'queued', 'starting', 'running', 'waiting']);
+const activeRequestStatuses = new Set(['pending', 'queued', 'running', 'waiting']);
+
+function attachConflict(reason: string, error: string) {
+  return { ok: false, outcome: 'attach-conflict', reason, error };
+}
+
+async function attachUpgradedBinding(request: any) {
+  if (typeof request.threadId !== 'string' || !request.threadId || typeof request.projectId !== 'string'
+    || !request.projectId || typeof request.providerInstanceId !== 'string' || !request.providerInstanceId
+    || !request.expectedSnapshot || !request.event) {
+    return attachConflict('invalid-identity', 'attach requires a verified thread snapshot and one binding event');
+  }
+  let events: any[];
+  try { events = decodeEvents([request.event]); }
+  catch (error) { return attachConflict('invalid-event', String(error)); }
+  const event = events[0];
+  const threadId = ThreadId.make(request.threadId);
+  const binding = event.payload;
+  const refValid = (ref: any) => ref === null || (ref?.driver === event.driver
+    && ref?.strength === 'strong' && typeof ref?.nativeId === 'string' && ref.nativeId.length > 0);
+  const emptyList = (value: any) => Array.isArray(value) && value.length === 0;
+  if (event.type !== 'provider-thread.updated' || event.threadId !== threadId
+    || event.driver !== binding.driver || event.providerInstanceId !== request.providerInstanceId
+    || binding.appThreadId !== threadId || binding.providerInstanceId !== request.providerInstanceId
+    || typeof event.driver !== 'string' || !event.driver
+    || binding.status !== 'idle' || binding.providerSessionId !== null || binding.ownerNodeId !== null
+    || binding.firstRunOrdinal !== null || binding.lastRunOrdinal !== null
+    || !emptyList(binding.handoffIds) || binding.forkedFrom !== null || !emptyList(binding.pendingBackgroundTasks)
+    || !refValid(binding.nativeThreadRef) || !refValid(binding.nativeConversationHeadRef)
+    || (binding.nativeThreadRef === null && binding.nativeConversationHeadRef !== null)) {
+    return attachConflict('invalid-binding-event', 'attach accepts one idle app binding with exact provider identity and null or strong source references');
+  }
+  const expected = request.expectedSnapshot;
+  if (!expected?.thread || !Array.isArray(expected.messages) || !Array.isArray(expected.turnItems)
+    || !Array.isArray(expected.plans) || !emptyList(expected.providerThreads) || !emptyList(expected.providerTurns)) {
+    return attachConflict('invalid-expected-snapshot', 'expectedSnapshot must contain the verified shell and complete history with empty binding records');
+  }
+  const expectedThread = expected.thread;
+  if (expectedThread.id !== threadId || expectedThread.projectId !== request.projectId
+    || expectedThread.providerInstanceId !== request.providerInstanceId || expectedThread.historyOrigin !== 'v1_import'
+    || expectedThread.activeProviderThreadId != null || expectedThread.deletedAt != null) {
+    return attachConflict('invalid-expected-shell', 'expected snapshot is not an unbound live v1-import shell for the requested identities');
+  }
+
+  let result: any;
+  try {
+    result = await run(Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const eventStore = yield* EventStore.EventStoreV2;
+      return yield* sql.withTransaction(Effect.gen(function* () {
+        const shell = yield* projections.getThreadShell(threadId);
+        if (!shell || shell.deletedAt != null || shell.projectId !== request.projectId
+          || shell.providerInstanceId !== request.providerInstanceId || shell.historyOrigin !== 'v1_import') {
+          return attachConflict('shell-identity-conflict', 'target shell is missing, deleted, or no longer matches the verified v1 import owner');
+        }
+        const snapshot = yield* projections.getThreadSnapshot(threadId);
+        const state: any = snapshot?.projection;
+        if (!state?.thread || state.runs.some((entry: any) => activeRunStatuses.has(entry.status))
+          || state.attempts.some((entry: any) => activeRunStatuses.has(entry.status))
+          || state.runtimeRequests.some((entry: any) => activeRequestStatuses.has(entry.status))) {
+          return attachConflict('thread-active', 'target shell has active or indeterminate orchestration state');
+        }
+        const records = yield* projections.getThreadRecords(threadId, ['messages', 'turnItems', 'plans', 'providerThreads', 'providerTurns']);
+        const stored = yield* eventStore.read({ threadId }).pipe(Stream.runCollect);
+        const prior = stored.find((entry: any) => entry.event.id === event.id);
+        if (prior) {
+          const exactBinding = shell.activeProviderThreadId === binding.id && records.providerThreads.length === 1
+            && canonicalJson(records.providerThreads[0]) === canonicalJson(binding) && records.providerTurns.length === 0;
+          if (exactBinding && prior.event.type === event.type && prior.event.driver === event.driver
+            && prior.event.providerInstanceId === event.providerInstanceId
+            && canonicalJson(prior.event.payload) === canonicalJson(binding)) {
+            return { ok: true, outcome: 'already-attached', threadId: request.threadId,
+              storedSequences: [{ eventId: event.id, threadId: request.threadId, sequence: prior.sequence }],
+              storedSequenceRange: { first: prior.sequence, last: prior.sequence } };
+          }
+          return attachConflict('event-id-conflict', 'attach event ID already belongs to different native state');
+        }
+        if (shell.activeProviderThreadId != null || records.providerThreads.length || records.providerTurns.length) {
+          return attachConflict('binding-already-present', 'target shell already has provider bindings or provider turns');
+        }
+        const actual = { thread: shell, messages: records.messages, turnItems: records.turnItems,
+          plans: records.plans, providerThreads: records.providerThreads, providerTurns: records.providerTurns };
+        if (canonicalJson(actual) !== canonicalJson(expected)) {
+          return attachConflict('history-changed', 'target shell or projected history changed after source reconciliation inspected it');
+        }
+        const owners = yield* sql`SELECT thread_id FROM orchestration_v2_projection_provider_threads WHERE provider_thread_id = ${binding.id} LIMIT 1`;
+        if (owners.length) return attachConflict('provider-thread-id-conflict', 'T3-local provider-thread ID is already owned by another task');
+        const eventRows = yield* sql`SELECT event_id FROM orchestration_events WHERE event_id = ${event.id} LIMIT 1`;
+        if (eventRows.length) return attachConflict('event-id-conflict', 'attach event ID already exists outside this exact binding transition');
+        const written = yield* Effect.match(Effect.flatMap(EventSink.EventSinkV2, (sink) => sink.write({ events })), {
+          onFailure: (error) => ({ ok: false as const, outcome: 'write-failed' as const, error: String(error) }),
+          onSuccess: (entries) => ({ ok: true as const, outcome: 'attached' as const, stored: entries }),
+        });
+        if (!written.ok) return written;
+        const entry = written.stored[0]!;
+        return { ok: true as const, outcome: 'attached' as const, threadId: request.threadId,
+          storedSequences: [{ eventId: event.id, threadId: request.threadId, sequence: entry.sequence }],
+          storedSequenceRange: { first: entry.sequence, last: entry.sequence } };
+      }));
+    }), makeLayerFor(request.dbPath));
+  } catch (error) {
+    return { ok: false, outcome: 'write-failed', error: String(error) };
+  }
+  if (!result.ok || result.outcome === 'already-attached') return result;
+  const readback = await run(Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const snapshot = yield* projections.getThreadSnapshot(threadId);
+    const records = yield* projections.getThreadRecords(threadId, ['providerThreads', 'providerTurns']);
+    return { snapshot, records };
+  }), makeLayerFor(request.dbPath, true));
+  const projected = readback.snapshot?.projection;
+  if (projected?.thread?.activeProviderThreadId !== binding.id || readback.records.providerThreads.length !== 1
+    || canonicalJson(readback.records.providerThreads[0]) !== canonicalJson(binding) || readback.records.providerTurns.length !== 0) {
+    return { ok: false, outcome: 'readback-conflict', error: 'native binding write committed without the exact provider projection readback' };
+  }
+  return { ...result, projections: [{ threadId: request.threadId, ...readback }] };
+}
+
+function replaceConflict(reason: string, message: string) {
+  return { ok: false, outcome: 'replace-conflict', reason, error: message };
+}
+
+async function replaceRequest(request: any) {
+  const required = ['replacementThreadId', 'projectId', 'providerInstanceId', 'replacementProviderThreadId', 'driver'];
+  if (required.some((key) => typeof request[key] !== 'string' || request[key].length === 0)
+    || !Array.isArray(request.oldThreadIds) || request.oldThreadIds.length === 0
+    || !Array.isArray(request.oldBindings) || request.oldBindings.length !== request.oldThreadIds.length
+    || !Object.hasOwn(request, 'nativeThreadRef') || !Object.hasOwn(request, 'expectedConversationHeadRef')) {
+    return replaceConflict('invalid-identity', 'replace requires project, provider, old-thread, and replacement identities');
+  }
+  const oldThreadIds = request.oldThreadIds as string[];
+  const bindingsByThreadId = new Map((request.oldBindings as any[]).map((entry) => [entry.threadId, entry]));
+  if (new Set(oldThreadIds).size !== oldThreadIds.length || oldThreadIds.includes(request.replacementThreadId)
+    || bindingsByThreadId.size !== oldThreadIds.length || oldThreadIds.some((id) => !bindingsByThreadId.has(id))) {
+    return replaceConflict('invalid-thread-set', 'replace requires unique old thread IDs distinct from the replacement');
+  }
+  const refIsValid = (ref: any) => ref === null || (ref?.driver === request.driver
+    && ref?.strength === 'strong' && typeof ref?.nativeId === 'string' && ref.nativeId.length > 0);
+  if (!refIsValid(request.nativeThreadRef) || !refIsValid(request.expectedConversationHeadRef)
+    || (request.nativeThreadRef === null && request.expectedConversationHeadRef !== null)) {
+    return replaceConflict('invalid-continuation-reference', 'replace continuation references must be null or strong references for the selected provider');
+  }
+  for (const oldBinding of request.oldBindings as any[]) {
+    if (typeof oldBinding.providerThreadId !== 'string' || !oldBinding.providerThreadId
+      || !refIsValid(oldBinding.nativeThreadRef) || !refIsValid(oldBinding.expectedConversationHeadRef)
+      || !sameNativeRef(oldBinding.nativeThreadRef, request.nativeThreadRef)) {
+      return replaceConflict('invalid-old-binding', 'every old thread requires its exact provider binding and the same native source session');
+    }
+  }
+  const transferRuntimeFrom = request.transferRuntimeFromThreadId ?? oldThreadIds[0];
+  if (!oldThreadIds.includes(transferRuntimeFrom)) {
+    return replaceConflict('invalid-runtime-owner', 'runtime transfer source must be one of the retired threads');
+  }
+  const transferBinding = bindingsByThreadId.get(transferRuntimeFrom) as any;
+  if (!sameNativeRef(transferBinding.expectedConversationHeadRef, request.expectedConversationHeadRef)) {
+    return replaceConflict('invalid-runtime-owner', 'replacement conversation head must match the selected old provider binding');
+  }
+  let events: any[];
+  try { events = decodeEvents(request.events); }
+  catch (error) { return replaceConflict('invalid-events', String(error)); }
+  const replacementId = ThreadId.make(request.replacementThreadId);
+  const createEvents = events.filter((event: any) => event.type === 'thread.created');
+  const deleteEvents = events.filter((event: any) => event.type === 'thread.deleted');
+  if (createEvents.length !== 1 || createEvents[0].threadId !== replacementId
+    || createEvents[0].payload.id !== replacementId
+    || deleteEvents.length !== oldThreadIds.length
+    || new Set(deleteEvents.map((event: any) => event.threadId)).size !== oldThreadIds.length
+    || oldThreadIds.some((id) => !deleteEvents.some((event: any) => event.threadId === id))) {
+    return replaceConflict('invalid-event-set', 'replace requires one replacement thread and one tombstone for every old thread');
+  }
+  if (deleteEvents.some((event: any) => event.payload.projectId !== request.projectId
+    || event.payload.providerInstanceId !== request.providerInstanceId)) {
+    return replaceConflict('event-identity-mismatch', 'every retired thread shell must belong to the requested project and provider instance');
+  }
+  const replacementEvents = events.filter((event: any) => event.threadId === replacementId);
+  const tombstonesValid = deleteEvents.every((event: any) => event.payload.id === event.threadId
+    && String(event.payload.deletedAt) === String(event.occurredAt)
+    && String(event.payload.updatedAt) === String(event.occurredAt));
+  const shellIdentityValid = createEvents[0].payload.projectId === request.projectId
+    && createEvents[0].payload.providerInstanceId === request.providerInstanceId
+    && createEvents[0].payload.activeProviderThreadId === request.replacementProviderThreadId;
+  if (replacementEvents.length + deleteEvents.length !== events.length
+    || !tombstonesValid || !shellIdentityValid) {
+    return replaceConflict('event-identity-mismatch', 'replace events must preserve requested identity and carry full updated tombstones');
+  }
+  const providerEvents = replacementEvents.filter((event: any) => event.type === 'provider-thread.updated');
+  if (providerEvents.length !== 1) return replaceConflict('provider-binding-ambiguous', 'replacement must contain exactly one native provider binding');
+  const binding = providerEvents[0].payload;
+  if (providerEvents[0].driver !== request.driver || providerEvents[0].providerInstanceId !== request.providerInstanceId
+    || binding.id !== request.replacementProviderThreadId || binding.appThreadId !== replacementId
+    || binding.driver !== request.driver || binding.providerInstanceId !== request.providerInstanceId
+    || !sameNativeRef(binding.nativeThreadRef, request.nativeThreadRef)
+    || !sameNativeRef(binding.nativeConversationHeadRef, request.expectedConversationHeadRef)) {
+    return replaceConflict('replacement-provider-mismatch', 'replacement provider binding does not retain the selected native source session and conversation head');
+  }
+  for (const event of replacementEvents as any[]) {
+    if ((event.payload?.threadId !== undefined && event.payload.threadId !== replacementId)
+      || (event.payload?.projectId !== undefined && event.payload.projectId !== request.projectId)
+      || (event.providerInstanceId !== undefined && event.providerInstanceId !== request.providerInstanceId)) {
+      return replaceConflict('event-identity-mismatch', 'replacement event payload identity does not match the requested project and thread');
+    }
+  }
+  const eventIds = events.map((event: any) => event.id);
+  if (new Set(eventIds).size !== eventIds.length) return replaceConflict('duplicate-event-id', 'replace request contains duplicate event IDs');
+
+  let result: any;
+  try {
+    result = await run(Effect.gen(function* () {
+      const sql = yield* SqlClient.SqlClient;
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const eventStore = yield* EventStore.EventStoreV2;
+      const projectStore = yield* ProjectStore.ProjectStoreV2;
+      return yield* sql.withTransaction(Effect.gen(function* () {
+        const existingShell = yield* projections.getThreadShell(replacementId);
+        if (existingShell) {
+          const records = yield* projections.getThreadRecords(replacementId, ['providerThreads']);
+          const stored = yield* eventStore.read({ threadId: replacementId }).pipe(Stream.runCollect);
+          const storedById = new Map(stored.map((entry: any) => [entry.event.id, entry.sequence]));
+          for (const rawId of oldThreadIds) {
+            const oldEvents = yield* eventStore.read({ threadId: ThreadId.make(rawId) }).pipe(Stream.runCollect);
+            for (const entry of oldEvents as any[]) storedById.set(entry.event.id, entry.sequence);
+          }
+          const exactEventsPresent = events.every((event: any) => storedById.has(event.id));
+          const oldRetired = events.filter((event: any) => event.type === 'thread.deleted')
+            .every((event: any) => oldThreadIds.includes(event.threadId) && storedById.has(event.id));
+          const replacementBinding = records.providerThreads.find((entry: any) => entry.id === request.replacementProviderThreadId);
+          if (exactEventsPresent && oldRetired && existingShell.projectId === request.projectId
+            && existingShell.providerInstanceId === request.providerInstanceId
+            && replacementBinding?.appThreadId === replacementId
+            && sameNativeRef(replacementBinding.nativeThreadRef, request.nativeThreadRef)
+            && sameNativeRef(replacementBinding.nativeConversationHeadRef, request.expectedConversationHeadRef)) {
+            const sequences = events.map((event: any) => Number(storedById.get(event.id)));
+            const storedSequences = events.map((event: any) => ({ eventId: event.id, threadId: event.threadId,
+              sequence: Number(storedById.get(event.id)) }));
+            return { ok: true, outcome: 'already-replaced', replacementThreadId: request.replacementThreadId,
+              storedSequences, storedSequenceRange: { first: Math.min(...sequences), last: Math.max(...sequences) } };
+          }
+          return replaceConflict('replacement-identity-conflict', 'replacement ID already exists without matching committed replacement evidence');
+        }
+
+        const projectOption = yield* projectStore.get(ProjectId.make(request.projectId), { includeDeleted: true });
+        if (Option.isNone(projectOption) || projectOption.value.deletedAt != null) {
+          return replaceConflict('project-not-live', 'replacement project is missing or deleted');
+        }
+        for (const rawId of oldThreadIds) {
+          const expectedOldBinding = bindingsByThreadId.get(rawId) as any;
+          const oldId = ThreadId.make(rawId);
+          const shell = yield* projections.getThreadShell(oldId);
+          if (!shell || shell.deletedAt != null) return replaceConflict('old-thread-not-live', `old thread is missing or deleted: ${rawId}`);
+          if (shell.projectId !== request.projectId || shell.providerInstanceId !== request.providerInstanceId
+            || shell.activeProviderThreadId !== expectedOldBinding.providerThreadId) {
+            return replaceConflict('old-thread-identity-conflict', `old thread identity does not match the replacement owner: ${rawId}`);
+          }
+          const snapshot = yield* projections.getThreadSnapshot(oldId);
+          const state: any = snapshot.projection;
+          if (state.runs.some((run: any) => activeRunStatuses.has(run.status))
+            || state.attempts.some((attempt: any) => activeRunStatuses.has(attempt.status))
+            || state.runtimeRequests.some((entry: any) => activeRequestStatuses.has(entry.status))) {
+            return replaceConflict('old-thread-active', `old thread has active orchestration state: ${rawId}`);
+          }
+          const records = yield* projections.getThreadRecords(oldId, ['providerThreads']);
+          const bindings = records.providerThreads.filter((entry: any) => entry.id === expectedOldBinding.providerThreadId);
+          if (bindings.length !== 1 || bindings[0].appThreadId !== oldId
+            || bindings[0].providerInstanceId !== request.providerInstanceId || bindings[0].driver !== request.driver
+            || bindings[0].status !== 'idle' || !sameNativeRef(bindings[0].nativeThreadRef, expectedOldBinding.nativeThreadRef)
+            || !sameNativeRef(bindings[0].nativeConversationHeadRef, expectedOldBinding.expectedConversationHeadRef)) {
+            return replaceConflict('old-provider-identity-conflict', `old provider binding is active, missing, ambiguous, or changed: ${rawId}`);
+          }
+        }
+        for (const id of eventIds) {
+          const rows = yield* sql`SELECT event_id FROM orchestration_events WHERE event_id = ${id} LIMIT 1`;
+          if (rows.length) return replaceConflict('event-id-exists', `replace event ID already exists: ${id}`);
+        }
+        const providerThreadOwners = yield* sql`SELECT thread_id FROM orchestration_v2_projection_provider_threads WHERE provider_thread_id = ${request.replacementProviderThreadId} LIMIT 1`;
+        if (providerThreadOwners.length) {
+          return replaceConflict('provider-thread-id-conflict', 'replacement T3-local provider-thread ID is already owned by another task');
+        }
+        const runtimeRows: any[] = [];
+        for (const rawId of oldThreadIds) {
+          const rows = yield* sql`SELECT thread_id FROM provider_session_runtime WHERE thread_id = ${rawId}`;
+          runtimeRows.push(...rows);
+        }
+        const replacementRuntime = yield* sql`SELECT thread_id FROM provider_session_runtime WHERE thread_id = ${request.replacementThreadId}`;
+        if (replacementRuntime.length > 0) {
+          return replaceConflict('runtime-owner-ambiguous', 'provider runtime ownership cannot transfer uniquely to the replacement');
+        }
+
+        // The one-shot helper has no T3 event subscribers; the enclosing SQL
+        // transaction contains EventSink's savepoint and all replacement events.
+        const written = yield* Effect.match(
+          Effect.flatMap(EventSink.EventSinkV2, (sink) => sink.write({ events })),
+          { onFailure: (error) => ({ ok: false as const, outcome: 'write-failed' as const, error: String(error) }),
+            onSuccess: (stored) => ({ ok: true as const, outcome: 'replaced' as const,
+              stored, storedSequenceRange: { first: stored[0]?.sequence, last: stored.at(-1)?.sequence } }) },
+        );
+        if (!written.ok) return written;
+
+        // Runtime cursors are not projections. Transfer their existing native
+        // row only when the source binding itself passed the exact-ref check.
+        for (const runtimeRow of runtimeRows) {
+          const priorId = String(runtimeRow.thread_id);
+          if (priorId === transferRuntimeFrom) {
+            yield* sql`UPDATE provider_session_runtime SET thread_id = ${request.replacementThreadId} WHERE thread_id = ${priorId}`;
+          } else {
+            yield* sql`DELETE FROM provider_session_runtime WHERE thread_id = ${priorId}`;
+          }
+        }
+        return { ok: true as const, outcome: 'replaced' as const, replacementThreadId: request.replacementThreadId,
+          storedSequences: written.stored.map((entry: any) => ({ eventId: entry.event.id, threadId: entry.event.threadId, sequence: entry.sequence })),
+          storedSequenceRange: written.storedSequenceRange };
+      }));
+    }), makeLayerFor(request.dbPath));
+  } catch (error) {
+    return { ok: false, outcome: 'write-failed', error: String(error) };
+  }
+  if (!result.ok || result.outcome === 'already-replaced') return result;
+  const readback = await run(Effect.gen(function* () {
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const result: any[] = [];
+    const eventStore = yield* EventStore.EventStoreV2;
+    for (const rawId of [...oldThreadIds, request.replacementThreadId]) {
+      const threadId = ThreadId.make(rawId);
+      const shell = yield* projections.getThreadShell(threadId);
+      const snapshot = shell ? yield* projections.getThreadSnapshot(threadId) : undefined;
+      const records = shell ? yield* projections.getThreadRecords(threadId, ['messages', 'turnItems', 'plans', 'providerThreads', 'providerTurns']) : undefined;
+      const events = yield* eventStore.read({ threadId }).pipe(Stream.runCollect);
+      result.push({ threadId: rawId, ...(snapshot ? { snapshot } : {}), ...(records ? { records } : {}),
+        events: events.map((entry: any) => ({ id: entry.event.id, type: entry.event.type })) });
+    }
+    return result;
+  }), makeLayerFor(request.dbPath, true));
+  const tombstones = new Map(events.filter((event: any) => event.type === 'thread.deleted')
+    .map((event: any) => [event.threadId, event.id]));
+  const oldRetired = readback.filter((entry: any) => oldThreadIds.includes(entry.threadId))
+    .every((entry: any) => !entry.snapshot && entry.events.some((event: any) => event.id === tombstones.get(entry.threadId) && event.type === 'thread.deleted'));
+  const replacement = readback.find((entry: any) => entry.threadId === request.replacementThreadId);
+  if (!oldRetired || !replacement?.snapshot?.projection?.thread
+    || replacement.snapshot.projection.thread.projectId !== request.projectId
+    || replacement.snapshot.projection.thread.providerInstanceId !== request.providerInstanceId
+    || !replacement.records.providerThreads.some((entry: any) => entry.id === request.replacementProviderThreadId
+      && sameNativeRef(entry.nativeThreadRef, request.nativeThreadRef)
+      && sameNativeRef(entry.nativeConversationHeadRef, request.expectedConversationHeadRef))) {
+    return { ok: false, outcome: 'readback-conflict', error: 'native replacement committed without the expected projected task and transferred continuation identity' };
+  }
+  return { ...result, projections: readback };
+}
+
 async function dispatchRequest(request: any) {
   if (typeof request.dbPath !== 'string' || !request.dbPath) throw new Error('request requires dbPath');
   if (request.op === 'inspect') return inspect(request);
   if (request.op === 'write') return writeRequest(request);
   if (request.op === 'append') return appendRequest(request);
+  if (request.op === 'attach-upgraded-binding') return attachUpgradedBinding(request);
+  if (request.op === 'replace') return replaceRequest(request);
   throw new Error(`unsupported operation: ${request.op}`);
 }
 

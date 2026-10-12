@@ -1,8 +1,8 @@
 import { mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import * as Effect from 'effect/Effect';
-import * as SqliteClient from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/shared/src/nodeSqliteClient.ts';
-import * as Migrations from '../../../artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/src/persistence/Migrations.ts';
+import * as SqliteClient from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/packages/shared/src/nodeSqliteClient.ts';
+import * as Migrations from '../../../artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/apps/server/src/persistence/Migrations.ts';
 const [dbPath] = process.argv.slice(2);
 if (!dbPath) throw new Error('usage: node fixture.mjs <synthetic-db-path>');
 await mkdir(dirname(dbPath),{recursive:true});

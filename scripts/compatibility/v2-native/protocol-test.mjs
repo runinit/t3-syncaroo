@@ -54,7 +54,7 @@ assert.equal(before.ok,true); assert.equal(before.integrity,'ok'); assert.equal(
 assert.equal(before.profile.requiredTablesPresent,true); assert.equal(before.profile.isV2Schema,true);
 assert.equal(before.profile.hasV2ThreadProjectionTable,true);
 const written = run(nodePath,[helperPath],JSON.stringify(request(dbPath,'write',{projectEvent,events})));
-assert.equal(written.ok,true); assert.equal(written.outcome,'written'); assert.equal(written.projectCommitted,true);
+assert.equal(written.ok,true,JSON.stringify(written)); assert.equal(written.outcome,'written'); assert.equal(written.projectCommitted,true);
 assert.equal(written.storedSequenceRange.first,2); assert.equal(written.storedSequenceRange.last,5);
 assert.equal(written.projections[0].threadId,threadId); assert.equal(written.projections[0].records.messages[0].text,message.text);
 assert.equal(written.projections[0].records.providerThreads[0].nativeThreadRef.nativeId,'source-session-v2-protocol');
@@ -225,7 +225,7 @@ const failed = run(nodePath, [helperPath], JSON.stringify(request(rollbackDb, 'w
 })));
 assert.equal(failed.ok,false); assert.equal(failed.projectCommitted,true); assert.equal(failed.projectCompensated,true);
 const afterFailure = run(nodePath,[helperPath],JSON.stringify(request(rollbackDb,'inspect',{threadIds:[threadId],projectIds:[rollbackProjectId]})));
-assert.equal(afterFailure.ok,true); assert.equal(afterFailure.threads[0].exists,false);
+assert.equal(afterFailure.ok,true,JSON.stringify(afterFailure)); assert.equal(afterFailure.threads[0].exists,false);
 assert.equal(afterFailure.projects.length, 1);
 assert.equal(afterFailure.projects[0].deletedAt != null, true);
 const deletedAtBeforeReuse = afterFailure.projects[0].deletedAt;
@@ -284,8 +284,129 @@ const invalidProjectCommand = { ...projectEvent, commandType: 'project.delete',
     payload: { projectId, deletedAt: baseTime } },
 };
 await rejectsBeforeWrite('invalid-project-command', events, invalidProjectCommand, [projectId]);
+const upgradedDb = join(base, 'attach-upgraded-binding', 'statev2.sqlite');
+run(nodePath, [fixturePath, upgradedDb]);
+const upgradedThread = { ...thread, activeProviderThreadId: null };
+const upgradedEvents = events.filter((event) => event.type !== 'provider-thread.updated')
+  .map((event) => event.type === 'thread.created' ? { ...event, payload: upgradedThread } : event);
+assert.equal(run(nodePath, [helperPath], JSON.stringify(request(upgradedDb, 'write', {
+  projectEvent, events: upgradedEvents,
+}))).ok, true);
+const upgradedState = run(nodePath, [helperPath], JSON.stringify(request(upgradedDb, 'inspect', { threadIds: [threadId] })));
+const expectedSnapshot = { thread: upgradedState.threads[0].thread,
+  messages: upgradedState.threads[0].records.messages, turnItems: upgradedState.threads[0].records.turnItems,
+  plans: upgradedState.threads[0].records.plans, providerThreads: [], providerTurns: [] };
+const attachedProviderThreadId = 'provider-thread:v2-protocol:upgraded';
+const attachedProviderThread = { ...providerThread, id: attachedProviderThreadId, appThreadId: threadId,
+  nativeThreadRef: null, nativeConversationHeadRef: null };
+const attachEvent = { id: 't3-import:v2-protocol:attach-upgraded', type: 'provider-thread.updated', threadId,
+  driver: 'codex', providerInstanceId, occurredAt: updatedTime, payload: attachedProviderThread };
+const attachRequest = (overrides = {}) => request(upgradedDb, 'attach-upgraded-binding', {
+  threadId, projectId, providerInstanceId, expectedSnapshot, event: attachEvent, ...overrides,
+});
+const changedAttach = run(nodePath, [helperPath], JSON.stringify(attachRequest({ expectedSnapshot: {
+  ...expectedSnapshot, messages: [{ ...expectedSnapshot.messages[0], text: 'changed after inspected proof' }],
+} })));
+assert.equal(changedAttach.ok, false); assert.equal(changedAttach.outcome, 'attach-conflict');
+const attached = run(nodePath, [helperPath], JSON.stringify(attachRequest()));
+assert.equal(attached.ok, true, JSON.stringify(attached)); assert.equal(attached.outcome, 'attached');
+assert.equal(attached.storedSequences[0].eventId, attachEvent.id);
+const attachedRetry = run(nodePath, [helperPath], JSON.stringify(attachRequest()));
+assert.equal(attachedRetry.ok, true, JSON.stringify(attachedRetry)); assert.equal(attachedRetry.outcome, 'already-attached');
+const attachedState = run(nodePath, [helperPath], JSON.stringify(request(upgradedDb, 'inspect', { threadIds: [threadId] })));
+assert.equal(attachedState.threads[0].thread.activeProviderThreadId, attachedProviderThreadId);
+assert.equal(attachedState.threads[0].records.providerThreads.length, 1);
+assert.equal(attachedState.threads[0].records.providerThreads[0].nativeThreadRef, null);
+const bindingCollisionDb = join(base, 'binding-id-collision', 'statev2.sqlite');
+run(nodePath, [fixturePath, bindingCollisionDb]);
+assert.equal(run(nodePath, [helperPath], JSON.stringify(request(bindingCollisionDb, 'write', { projectEvent, events }))).ok, true);
+const secondThreadId = 'import:codex:session-v2-protocol-second';
+const collidingEvents = events.map((entry, index) => {
+  const payload = { ...entry.payload };
+  if (entry.type === 'thread.created') Object.assign(payload, { id: secondThreadId, activeProviderThreadId: providerThreadId,
+    lineage: { ...thread.lineage, rootThreadId: secondThreadId } });
+  if (entry.type === 'message.updated') Object.assign(payload, { id: 'message:v2-protocol:second', threadId: secondThreadId });
+  if (entry.type === 'turn-item.updated') Object.assign(payload, { id: 'turn-item:v2-protocol:second', threadId: secondThreadId,
+    messageId: 'message:v2-protocol:second' });
+  if (entry.type === 'provider-thread.updated') Object.assign(payload, { appThreadId: secondThreadId });
+  return { ...entry, id: `t3-import:v2-protocol:second:${index}`, threadId: secondThreadId, payload };
+});
+const providerIdCollision = run(nodePath, [helperPath], JSON.stringify(request(bindingCollisionDb, 'write', { events: collidingEvents })));
+assert.equal(providerIdCollision.ok, false); assert.equal(providerIdCollision.outcome, 'provider-thread-id-conflict');
+const afterProviderIdCollision = run(nodePath, [helperPath], JSON.stringify(request(bindingCollisionDb, 'inspect', {
+  threadIds: [threadId, secondThreadId],
+})));
+assert.equal(afterProviderIdCollision.threads[0].records.providerThreads[0].appThreadId, threadId);
+assert.equal(afterProviderIdCollision.threads[1].exists, false);
+const replacementThreadId = 'import:codex:session-v2-protocol-replacement';
+const replacementProviderThreadId = 'provider-thread:v2-protocol-replacement';
+const replacementThread = { ...thread, id: replacementThreadId, title: 'Replaced native v2 protocol proof',
+  activeProviderThreadId: replacementProviderThreadId, createdAt: updatedTime, updatedAt: updatedTime,
+  lineage: { parentThreadId: null, relationshipToParent: null, rootThreadId: replacementThreadId } };
+const replacementMessage = { ...appendedMessage, id: 'message:v2-protocol:replacement', threadId: replacementThreadId };
+const replacementItem = { ...turnItem, id: 'turn-item:v2-protocol:replacement', threadId: replacementThreadId,
+  messageId: replacementMessage.id, text: replacementMessage.text };
+const replacementProviderThread = { ...providerThread, id: replacementProviderThreadId,
+  appThreadId: replacementThreadId, nativeConversationHeadRef: null, updatedAt: updatedTime };
+const replacementEvents = [
+  { id: 't3-import:v2-protocol:replacement-created', type: 'thread.created', threadId: replacementThreadId,
+    providerInstanceId, occurredAt: updatedTime, payload: replacementThread },
+  { id: 't3-import:v2-protocol:replacement-message', type: 'message.updated', threadId: replacementThreadId,
+    occurredAt: updatedTime, payload: replacementMessage },
+  { id: 't3-import:v2-protocol:replacement-item', type: 'turn-item.updated', threadId: replacementThreadId,
+    occurredAt: updatedTime, payload: replacementItem },
+  { id: 't3-import:v2-protocol:replacement-provider-thread', type: 'provider-thread.updated', threadId: replacementThreadId,
+    driver: 'codex', providerInstanceId, occurredAt: updatedTime, payload: replacementProviderThread },
+  { id: 't3-import:v2-protocol:retire-old-thread', type: 'thread.deleted', threadId, providerInstanceId,
+    occurredAt: updatedTime, payload: { ...thread, deletedAt: updatedTime, titleRegeneration: null, updatedAt: updatedTime } },
+];
+const replaceRequest = (targetDb = dbPath, eventsToReplace = replacementEvents, overrides = {}) => request(targetDb, 'replace', {
+  oldThreadIds: [threadId], replacementThreadId, projectId, providerInstanceId,
+  oldBindings: [{ threadId, providerThreadId, nativeThreadRef: nativeRef, expectedConversationHeadRef: null }],
+  transferRuntimeFromThreadId: threadId, replacementProviderThreadId, driver: 'codex', nativeThreadRef: nativeRef,
+  expectedConversationHeadRef: null, events: eventsToReplace, ...overrides,
+});
+const replacementDb = join(base, 'replace-happy-path', 'statev2.sqlite');
+run(nodePath, [fixturePath, replacementDb]);
+run(nodePath, [helperPath], JSON.stringify(request(replacementDb, 'write', { projectEvent, events })));
+const replaced = run(nodePath, [helperPath], JSON.stringify(replaceRequest(replacementDb)));
+assert.equal(replaced.ok, true, JSON.stringify(replaced)); assert.equal(replaced.outcome, 'replaced');
+assert.equal(replaced.replacementThreadId, replacementThreadId);
+assert.equal(replaced.storedSequenceRange.last - replaced.storedSequenceRange.first, replacementEvents.length - 1);
+assert.equal(replaced.projections.find((entry) => entry.threadId === replacementThreadId).records.messages.at(-1).text,
+  replacementMessage.text);
+const afterReplace = run(nodePath, [helperPath], JSON.stringify(request(replacementDb, 'inspect', {
+  threadIds: [threadId, replacementThreadId],
+})));
+assert.equal(afterReplace.threads.find((entry) => entry.threadId === threadId).exists, false);
+assert.equal(afterReplace.threads.find((entry) => entry.threadId === threadId).events.at(-1).id,
+  't3-import:v2-protocol:retire-old-thread');
+assert.equal(afterReplace.threads.find((entry) => entry.threadId === replacementThreadId).exists, true);
+const countAfterReplace = afterReplace.threads.flatMap((entry) => entry.events).length;
+const repeatedReplace = run(nodePath, [helperPath], JSON.stringify(replaceRequest(replacementDb)));
+assert.equal(repeatedReplace.ok, true, JSON.stringify(repeatedReplace)); assert.equal(repeatedReplace.outcome, 'already-replaced');
+const afterRepeatedReplace = run(nodePath, [helperPath], JSON.stringify(request(replacementDb, 'inspect', {
+  threadIds: [threadId, replacementThreadId],
+})));
+assert.equal(afterRepeatedReplace.threads.flatMap((entry) => entry.events).length, countAfterReplace);
+const badHeadDb = join(base, 'replace-stale-head', 'statev2.sqlite');
+run(nodePath, [fixturePath, badHeadDb]);
+run(nodePath, [helperPath], JSON.stringify(request(badHeadDb, 'write', { projectEvent, events })));
+run(nodePath, [helperPath], JSON.stringify(request(badHeadDb, 'append', {
+  threadId, projectId, providerInstanceId, providerThreadId, driver: 'codex',
+  nativeThreadRef: nativeRef, expectedConversationHeadRef: null, events: appendEvents,
+})));
+const badHeadReplacement = run(nodePath, [helperPath], JSON.stringify(replaceRequest(badHeadDb)));
+assert.equal(badHeadReplacement.ok, false); assert.equal(badHeadReplacement.outcome, 'replace-conflict');
+const afterBadHead = run(nodePath, [helperPath], JSON.stringify(request(badHeadDb, 'inspect', {
+  threadIds: [threadId, replacementThreadId],
+})));
+assert.equal(afterBadHead.threads[0].thread.deletedAt, null);
+assert.equal(afterBadHead.threads[1].exists, false);
 const nodeVersion = spawnSync(nodePath, ['--version'], { encoding: 'utf8' }).stdout.trim();
 console.log(JSON.stringify({result:'PASS',node:nodeVersion,inspect:true,write:true,append:true,appendIdentityConflicts:true,
   duplicateAppendEventIds:true,appendRollback:true,existingThreadConflict:true,
   threadEnvelopeValidation:true,projectIdentityValidation:true,projectCreateRestriction:true,noResumeAppend:true,
-  competingWriterAppend:true,tombstonedProjectNotResurrected:true,closeReopen:true,rollback:true,projectCompensation:true}));
+  competingWriterAppend:true,tombstonedProjectNotResurrected:true,atomicReplacement:true,replacementRetry:true,
+  replacementIdentityConflicts:true,upgradedBindingAttach:true,attachHistoryCas:true,attachRetry:true,
+  globalProviderThreadIdConflict:true,closeReopen:true,rollback:true,projectCompensation:true}));

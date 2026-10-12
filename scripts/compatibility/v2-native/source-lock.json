@@ -1,10 +1,10 @@
 {
-  "t3SourceCommit": "ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e",
+  "t3SourceCommit": "d07a07f33c0a1b317dea6234636976231c3688b5",
   "sourceArchive": {
-    "path": "artifacts/t3-reference/release.tar.gz",
-    "sha256": "88914520008d33477f78b15f86346958c4422bc5806effa76761f97344fd2e65"
+    "path": "artifacts/t3-reference-2994/release.tar.gz",
+    "sha256": "adb3a2523804bb9a017b04fb12af9e6da8d81d58c10d830240a6b4db71e11bf8"
   },
-  "pnpmLockSha256": "7ad8c525839cbb18b3d376a7fa7bddd9a9ba5deaba7d4cf8efb79daa5b890833",
+  "pnpmLockSha256": "1b88a17d597de5166053964e109bd42640c880bd43f4ba8013f6d09b178646cd",
   "sourceFiles": [
     {
       "path": "apps/server/src/attachmentPaths.ts",
@@ -92,7 +92,7 @@
     },
     {
       "path": "packages/contracts/src/assets.ts",
-      "sha256": "9ec17d4b623ad61e4d9857aca77897a8fc4acd81fed11d0172ab581dee34f786"
+      "sha256": "1f86ebf01c2ecff05032e540838f2a2c1ced8d7888c443045ba1c81506bae1b3"
     },
     {
       "path": "packages/contracts/src/assistantCitations.ts",
@@ -160,7 +160,7 @@
     },
     {
       "path": "packages/contracts/src/environment.ts",
-      "sha256": "4c777c3ff498ff85d6eb682a6d1c00d53db7860f1b308bbaa69de36dc2277faa"
+      "sha256": "cf330f7393acbc3f269d24efa10c7884bbd973e3705998a65a210caaa0ee69dd"
     },
     {
       "path": "packages/contracts/src/environmentHttp.ts",
@@ -300,7 +300,7 @@
     },
     {
       "path": "packages/contracts/src/settings.ts",
-      "sha256": "d49b28a8f35a7af37de48401b849b4fa998a5ad923d77efeb27c3f87f90ff1ef"
+      "sha256": "fabe105df9fde72c13a62057cd82d80e907a8618c7d95218d19694b093c48c56"
     },
     {
       "path": "packages/contracts/src/sourceControl.ts",
@@ -308,7 +308,7 @@
     },
     {
       "path": "packages/contracts/src/t3ProjectFile.ts",
-      "sha256": "3fc29a2908c3582b514ce4e426cbf3f7a534f7668d70f7cfbe291bc3766342ef"
+      "sha256": "1bed449921fbd5b6a6648288b6ff68b1eeb2c0c07b7428b591d4cc6a36f16cbd"
     },
     {
       "path": "packages/contracts/src/terminal.ts",
@@ -408,7 +408,7 @@
     },
     {
       "path": "packages/shared/src/mcpApp.ts",
-      "sha256": "c2170e99ba0c9152f6ac93dbdcf7d101a4ded889ff0db10fe12466e8c9de7aa6"
+      "sha256": "cafa2666dcabef17b80b3d9d0255df472ed2aec6b812f9851cacfcd12a71a8d6"
     },
     {
       "path": "packages/shared/src/nodeSqliteClient.ts",
@@ -778,7 +778,7 @@
     },
     {
       "path": "packages/contracts/src/assets.ts",
-      "sha256": "9ec17d4b623ad61e4d9857aca77897a8fc4acd81fed11d0172ab581dee34f786"
+      "sha256": "1f86ebf01c2ecff05032e540838f2a2c1ced8d7888c443045ba1c81506bae1b3"
     },
     {
       "path": "packages/contracts/src/assistantCitations.ts",
@@ -846,7 +846,7 @@
     },
     {
       "path": "packages/contracts/src/environment.ts",
-      "sha256": "4c777c3ff498ff85d6eb682a6d1c00d53db7860f1b308bbaa69de36dc2277faa"
+      "sha256": "cf330f7393acbc3f269d24efa10c7884bbd973e3705998a65a210caaa0ee69dd"
     },
     {
       "path": "packages/contracts/src/environmentHttp.ts",
@@ -986,7 +986,7 @@
     },
     {
       "path": "packages/contracts/src/settings.ts",
-      "sha256": "d49b28a8f35a7af37de48401b849b4fa998a5ad923d77efeb27c3f87f90ff1ef"
+      "sha256": "fabe105df9fde72c13a62057cd82d80e907a8618c7d95218d19694b093c48c56"
     },
     {
       "path": "packages/contracts/src/sourceControl.ts",
@@ -994,7 +994,7 @@
     },
     {
       "path": "packages/contracts/src/t3ProjectFile.ts",
-      "sha256": "3fc29a2908c3582b514ce4e426cbf3f7a534f7668d70f7cfbe291bc3766342ef"
+      "sha256": "1bed449921fbd5b6a6648288b6ff68b1eeb2c0c07b7428b591d4cc6a36f16cbd"
     },
     {
       "path": "packages/contracts/src/terminal.ts",
