@@ -57,6 +57,12 @@ function decodeProjectEvent(raw: any) {
 }
 
 async function inspect(request: any) {
+  const selectedEventIds = request.selectedEventIds === undefined ? [] : request.selectedEventIds;
+  if (!Array.isArray(selectedEventIds) || selectedEventIds.some((id: unknown) => typeof id !== 'string' || id.length === 0)
+    || new Set(selectedEventIds).size !== selectedEventIds.length) {
+    throw new Error('selectedEventIds must be an array of unique non-empty event IDs');
+  }
+  const selected = new Set<string>(selectedEventIds);
   const program = Effect.gen(function* () {
     const sql = yield* SqlClient.SqlClient;
     const eventStore = yield* EventStore.EventStoreV2;
@@ -80,10 +86,17 @@ async function inspect(request: any) {
       const shell = yield* projections.getThreadShell(threadId);
       const snapshot = shell ? yield* projections.getThreadSnapshot(threadId) : undefined;
       const records = shell ? yield* projections.getThreadRecords(threadId, ['messages', 'turnItems', 'plans', 'providerThreads', 'providerTurns']) : undefined;
+      const recoveryRecords = shell && request.includeRecoveryRecords === true
+        ? yield* projections.getThreadRecords(threadId, ['runs', 'attempts', 'nodes', 'checkpoints', 'checkpointScopes', 'contextHandoffs'])
+        : undefined;
       const events = yield* eventStore.read({ threadId }).pipe(Stream.runCollect);
       threads.push({ threadId, exists: shell !== null,
         ...(shell ? { thread: shell, records } : {}), ...(snapshot ? { snapshot } : {}),
-        events: events.map((stored: any) => ({ id: stored.event.id, sequence: stored.sequence })) });
+        ...(recoveryRecords ? { recoveryRecords } : {}),
+        events: events.map((stored: any) => ({ id: stored.event.id, sequence: stored.sequence })),
+        ...(selected.size > 0 ? { selectedEventDetails: events
+          .filter((stored: any) => selected.has(stored.event.id))
+          .map((stored: any) => ({ id: stored.event.id, sequence: stored.sequence, event: stored.event })) } : {}) });
     }
     return { ok: true, integrity: integrityRows[0]?.integrity_check ?? 'unknown',
       profile: { migrationRevision: migrations.at(-1)?.migrationId ?? 0,

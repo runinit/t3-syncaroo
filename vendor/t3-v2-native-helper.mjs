@@ -80140,6 +80140,11 @@ function decodeProjectEvent2(raw3) {
   };
 }
 async function inspect2(request) {
+  const selectedEventIds = request.selectedEventIds === void 0 ? [] : request.selectedEventIds;
+  if (!Array.isArray(selectedEventIds) || selectedEventIds.some((id2) => typeof id2 !== "string" || id2.length === 0) || new Set(selectedEventIds).size !== selectedEventIds.length) {
+    throw new Error("selectedEventIds must be an array of unique non-empty event IDs");
+  }
+  const selected = new Set(selectedEventIds);
   const program = gen2(function* () {
     const sql = yield* SqlClient;
     const eventStore = yield* EventStoreV2;
@@ -80163,13 +80168,16 @@ async function inspect2(request) {
       const shell = yield* projections.getThreadShell(threadId2);
       const snapshot2 = shell ? yield* projections.getThreadSnapshot(threadId2) : void 0;
       const records = shell ? yield* projections.getThreadRecords(threadId2, ["messages", "turnItems", "plans", "providerThreads", "providerTurns"]) : void 0;
+      const recoveryRecords = shell && request.includeRecoveryRecords === true ? yield* projections.getThreadRecords(threadId2, ["runs", "attempts", "nodes", "checkpoints", "checkpointScopes", "contextHandoffs"]) : void 0;
       const events2 = yield* eventStore.read({ threadId: threadId2 }).pipe(runCollect);
       threads.push({
         threadId: threadId2,
         exists: shell !== null,
         ...shell ? { thread: shell, records } : {},
         ...snapshot2 ? { snapshot: snapshot2 } : {},
-        events: events2.map((stored) => ({ id: stored.event.id, sequence: stored.sequence }))
+        ...recoveryRecords ? { recoveryRecords } : {},
+        events: events2.map((stored) => ({ id: stored.event.id, sequence: stored.sequence })),
+        ...selected.size > 0 ? { selectedEventDetails: events2.filter((stored) => selected.has(stored.event.id)).map((stored) => ({ id: stored.event.id, sequence: stored.sequence, event: stored.event })) } : {}
       });
     }
     return {

@@ -62,6 +62,42 @@ const after = run(nodePath,[helperPath],JSON.stringify(request(dbPath,'inspect',
 assert.equal(after.ok,true); assert.equal(after.threads[0].exists,true); assert.equal(after.threads[0].records.messages[0].text,message.text);
 assert.deepEqual(after.threads[0].events.map((event) => event.id), events.map((event) => event.id));
 assert.deepEqual(after.threads[0].events.map((event) => event.sequence), [2,3,4,5]);
+assert.equal(after.threads[0].selectedEventDetails, undefined, 'inspect must not return event payloads unless explicitly selected');
+const selectedRead = run(nodePath, [helperPath], JSON.stringify(request(dbPath, 'inspect', {
+  threadIds: [threadId], selectedEventIds: [events[3].id], includeRecoveryRecords: true,
+})));
+assert.equal(selectedRead.threads[0].selectedEventDetails.length, 1);
+const selectedDetail = selectedRead.threads[0].selectedEventDetails[0];
+assert.equal(selectedDetail.id, events[3].id);
+assert.equal(selectedDetail.event.id, events[3].id);
+assert.equal(selectedDetail.event.type, 'provider-thread.updated');
+assert.equal(selectedDetail.event.threadId, threadId);
+assert.equal(selectedDetail.event.driver, 'codex');
+assert.equal(selectedDetail.event.providerInstanceId, providerInstanceId);
+assert.equal(selectedDetail.event.payload.id, providerThreadId);
+assert.equal(selectedDetail.event.payload.nativeThreadRef.nativeId, providerThread.nativeThreadRef.nativeId);
+assert.deepEqual(selectedRead.threads[0].recoveryRecords.runs, []);
+assert.deepEqual(selectedRead.threads[0].recoveryRecords.attempts, []);
+assert.deepEqual(selectedRead.threads[0].recoveryRecords.nodes, []);
+assert.deepEqual(selectedRead.threads[0].recoveryRecords.checkpoints, []);
+assert.deepEqual(selectedRead.threads[0].recoveryRecords.checkpointScopes, []);
+assert.deepEqual(selectedRead.threads[0].recoveryRecords.contextHandoffs, []);
+const unscopedRead = run(nodePath, [helperPath], JSON.stringify(request(dbPath, 'inspect', {
+  threadIds: [], selectedEventIds: [events[3].id],
+})));
+assert.deepEqual(unscopedRead.threads, [], 'selected event details must be scoped to explicitly requested thread IDs');
+const foreignEventRead = run(nodePath, [helperPath], JSON.stringify(request(dbPath, 'inspect', {
+  threadIds: [threadId], selectedEventIds: ['event:foreign-thread:attachment'],
+})));
+assert.deepEqual(foreignEventRead.threads[0].selectedEventDetails, [], 'unrequested/foreign event IDs must not expose event payloads');
+const invalidSelectedRead = run(nodePath, [helperPath], JSON.stringify(request(dbPath, 'inspect', {
+  threadIds: [threadId], selectedEventIds: [events[3].id, events[3].id],
+})));
+assert.equal(invalidSelectedRead.ok, false, 'duplicate selected event IDs must be rejected');
+for (const selectedEventIds of ['', [events[3].id, ''], null]) {
+  const malformedRead = run(nodePath, [helperPath], JSON.stringify(request(dbPath, 'inspect', { threadIds: [threadId], selectedEventIds })));
+  assert.equal(malformedRead.ok, false, 'malformed selected event selectors must be rejected');
+}
 const nativeRef = providerThread.nativeThreadRef;
 const nextHeadRef = { driver: 'codex', nativeId: 'source-head:v2-protocol:next', strength: 'strong' };
 const appendedMessage = { ...message, id: 'message:v2-protocol:000002', text: 'A newly settled source turn.' };
