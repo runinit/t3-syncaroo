@@ -24,7 +24,7 @@ const input = (): NativeCheckpointProvenanceInput => ({
   runs: [{ id: runId, threadId, ordinal: 1, providerInstanceId: "codex", providerThreadId, rootNodeId: nodeId, activeAttemptId: attemptId, status: "completed", checkpointId }],
   runAttempts: [{ id: attemptId, threadId, runId, attemptOrdinal: 1, rootNodeId: nodeId, providerInstanceId: "codex", providerThreadId, providerTurnId: null, status: "completed" }],
   nodes: [{ id: nodeId, threadId, runId, kind: "root_turn", status: "completed", providerThreadId, providerTurnId: null, checkpointScopeId: scopeId }],
-  providerTurns: [{ id: `provider-turn:provider:codex:native-turn:${sourceNativeTurnId}`, providerThreadId, nodeId, runAttemptId: attemptId, nativeTurnRef: { driver: "codex", nativeId: sourceNativeTurnId, strength: "strong" }, ordinal: 1, status: "completed" }],
+  providerTurns: [{ id: `provider-turn:provider:codex:native-turn:${sourceNativeTurnId}`, threadId, providerThreadId, nodeId, runAttemptId: attemptId, nativeTurnRef: { driver: "codex", nativeId: sourceNativeTurnId, strength: "strong" }, ordinal: 1, status: "completed" }],
 });
 
 describe("native operational checkpoint provenance", () => {
@@ -59,6 +59,7 @@ describe("native operational checkpoint provenance", () => {
     ["foreign source turn", (value: ReturnType<typeof input>) => { value.providerTurns[0]!.nativeTurnRef.nativeId = "foreign-turn"; }],
     ["weak source reference", (value: ReturnType<typeof input>) => { value.providerTurns[0]!.nativeTurnRef.strength = "weak"; }],
     ["foreign node", (value: ReturnType<typeof input>) => { value.providerTurns[0]!.nodeId = "other-node"; }],
+    ["foreign provider-turn thread", (value: ReturnType<typeof input>) => { value.providerTurns[0]!.threadId = "foreign-thread"; }],
     ["ambiguous provider turns", (value: ReturnType<typeof input>) => { value.providerTurns.push({ ...value.providerTurns[0]!, id: "provider-turn-2" }); }],
     ["foreign extra provider turn on same attempt", (value: ReturnType<typeof input>) => { value.providerTurns.push({ ...value.providerTurns[0]!, id: "provider-turn-2", nodeId: "foreign-node" }); }],
     ["unlinked extra checkpoint item", (value: ReturnType<typeof input>) => { value.turnItems.push({ ...value.turnItems[0]!, id: "item-2", checkpointId: "foreign-checkpoint" }); }],

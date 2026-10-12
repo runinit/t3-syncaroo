@@ -67,7 +67,7 @@ export function deriveVerifiedCheckpointItemIds(input: NativeCheckpointProvenanc
       || node.checkpointScopeId !== checkpoint.scopeId) return [];
 
     const providerTurn = exactlyOne(input.providerTurns, (row) => row.runAttemptId === attempt.id);
-    if (!providerTurn || !input.verifiedSourceProviderTurnIds.includes(providerTurn.id)
+    if (!providerTurn || providerTurn.threadId !== input.threadId || !input.verifiedSourceProviderTurnIds.includes(providerTurn.id)
       || providerTurn.providerThreadId !== input.providerThreadId || providerTurn.nodeId !== node.id
       || providerTurn.status !== "completed") return [];
     const nativeRef = providerTurn.nativeTurnRef as Row | undefined;
