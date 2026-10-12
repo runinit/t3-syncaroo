@@ -9,6 +9,7 @@ import { checkpointForThread } from "../src/core/checkpoint.js";
 import { canonicalPath, sha256 } from "../src/core/util.js";
 import { resolveTargetPaths } from "../src/target/config.js";
 import { recordImports, type LedgerRecord } from "../src/target/ledger.js";
+import { callV2Native, planV2Thread } from "../src/target/importer.js";
 import { replaceConversations } from "../src/target/replace.js";
 import { canonicalConversation, canonicalThread, eventCount } from "./helpers.js";
 
@@ -81,6 +82,38 @@ function appendFollowup(thread: ReturnType<typeof canonicalThread>) {
 }
 
 describe.skipIf(!t3SourceDir || !existsSync(t3SourceDir))("public replacement of converted imports", () => {
+  it("returns a native attach CAS conflict without writing when the inspected snapshot is stale", async () => {
+    const { fixture, paths, thread, workspace } = await upgradedCodexFixture("t3-v2-upgrade-attach-conflict-");
+    const conversation = canonicalConversation(workspace, thread);
+    const inspected = await callV2Native(paths, { op: "inspect", threadIds: [fixture.threadId] });
+    const target = inspected.threads?.find((candidate) => candidate.threadId === fixture.threadId);
+    expect(target?.thread).toBeDefined();
+    const plan = planV2Thread({ conversation, resume: true }, thread, paths, "project-06", false, "codex");
+    const event = plan.events.find((candidate) => candidate.type === "provider-thread.updated");
+    expect(event).toBeDefined();
+    const expectedSnapshot = {
+      thread: target!.thread,
+      messages: target!.records?.messages ?? [],
+      turnItems: target!.records?.turnItems ?? [],
+      plans: target!.records?.plans ?? [],
+      providerThreads: [],
+      providerTurns: [],
+    };
+    const staleSnapshot = {
+      ...expectedSnapshot,
+      messages: expectedSnapshot.messages.map((message, index) => index === 0 ? { ...message, text: `${message.text} changed after inspection` } : message),
+    };
+    const before = eventCount(fixture.dbPath);
+
+    const result = await callV2Native(paths, {
+      op: "attach-upgraded-binding", threadId: fixture.threadId, projectId: "project-06",
+      providerInstanceId: "codex", expectedSnapshot: staleSnapshot, event,
+    });
+
+    expect(result).toMatchObject({ ok: false, outcome: "attach-conflict", reason: "history-changed" });
+    expect(eventCount(fixture.dbPath)).toBe(before);
+  });
+
   it("replaces a converted task addressed only by its old-target ledger row", async () => {
     const { root, fixture, paths, thread, oldRecord } = await upgradedCodexFixture("t3-v2-upgrade-replace-");
     appendFollowup(thread);

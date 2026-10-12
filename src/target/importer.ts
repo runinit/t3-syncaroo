@@ -465,7 +465,7 @@ export interface V2NativeReply {
   projectionMetadata?: { schemaVersion: number; lastSequence: number } | null;
   threads?: V2ThreadReply[];
   projects?: Array<{ id?: string; projectId?: string; workspaceRoot?: string; deletedAt?: string | null; [key: string]: unknown }>;
-  outcome?: "written" | "already-present" | "write-failed" | "replaced" | "already-replaced" | "replace-conflict" | "readback-conflict" | "attached" | "already-attached";
+  outcome?: "written" | "already-present" | "write-failed" | "replaced" | "already-replaced" | "replace-conflict" | "readback-conflict" | "attached" | "already-attached" | "attach-conflict";
   reason?: string;
   replacementThreadId?: string;
   storedSequences?: Array<{ eventId: string; threadId: string; sequence: number }>;
@@ -532,7 +532,7 @@ export function callV2Native(paths: TargetPaths, request: Record<string, unknown
         return;
       }
       if (response.ok !== true) {
-        if (request.op === "replace") {
+        if (request.op === "replace" || (request.op === "attach-upgraded-binding" && response.outcome === "attach-conflict")) {
           resolve(response);
           return;
         }
