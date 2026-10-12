@@ -157,7 +157,7 @@ export interface ImportItemResult {
   source: SourceName;
   sourceId: string;
   sourceKey: string;
-  status: "imported" | "already-imported" | "dry-run";
+  status: "imported" | "already-imported" | "dry-run" | "conflict";
   threadId: string;
   projectId: string;
   title: string;

@@ -435,6 +435,7 @@ export function materializeAssets(plans: Array<{ assets: PlannedAsset[] | V2Hist
 function aggregateStatus(results: ImportItemResult[], dryRun: boolean): ImportRunResult["status"] {
   if (dryRun) return "dry-run";
   const statuses = new Set(results.map((result) => result.status));
+  if (statuses.has("conflict")) return "mixed";
   if (statuses.size > 1) return "mixed";
   return statuses.has("already-imported") ? "already-imported" : "imported";
 }

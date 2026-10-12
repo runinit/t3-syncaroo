@@ -219,3 +219,17 @@ export function listImports(targetId: string, source?: string): StoredLedgerReco
     return rows.map(decodeRow);
   } finally { db.close(); }
 }
+
+/** Read mappings from explicitly known target IDs during the v1→v2 path change. */
+export function listImportsForTargets(targetIds: string[], source?: string): StoredLedgerRecord[] {
+  const ids = [...new Set(targetIds.filter((id) => id.length > 0))];
+  if (!ids.length) return [];
+  const db = openLedger();
+  try {
+    const rows = db.prepare(`
+      SELECT * FROM imports WHERE target_id IN (${ids.map(() => "?").join(", ")}) ${source ? "AND source = ?" : ""}
+      ORDER BY imported_at DESC
+    `).all(...ids, ...(source ? [source] : [])) as RawLedgerRow[];
+    return rows.map(decodeRow);
+  } finally { db.close(); }
+}

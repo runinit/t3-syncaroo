@@ -465,9 +465,9 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
       </>}
       {screen === "running" && <Text>Backing up and reconciling conversations…</Text>}
       {screen === "result" && (result || syncResult || replaceResult) && <>
-        <Text bold color="green">Complete</Text>
+        <Text bold color={result?.results.some((item) => item.status === "conflict") ? "yellow" : "green"}>{result?.results.some((item) => item.status === "conflict") ? "Completed with import conflicts" : "Complete"}</Text>
         {result ? <Text>Import backup: {result.backup ?? "not needed"}</Text> : null}
-        {result?.results.map((item) => <Text key={`import:${item.threadId}`}>{item.status === "imported" ? "✓" : "•"} {item.title} — {item.status}, {item.turns} turns, {item.events} events</Text>)}
+        {result?.results.map((item) => <Text key={`import:${item.threadId}`}>{item.status === "imported" ? "✓" : item.status === "conflict" ? "!" : "•"} {item.title} — {item.status}, {item.turns} turns, {item.events} events{item.warnings[0] ? `; ${item.warnings[0]}` : ""}</Text>)}
         {syncResult ? <Text>Sync backup: {syncResult.backup ?? "not needed"}</Text> : null}
         {syncResult?.results.map((item) => <Text key={`sync:${item.sourceKey}`}>{item.status === "synced" ? "✓" : "•"} {item.title} — {item.status}, {item.turnsAdded} added, {item.turnsAdopted} adopted, {item.events} events</Text>)}
         {replaceResult ? <Text>Replacement backup: {replaceResult.backup ?? "not needed"}</Text> : null}

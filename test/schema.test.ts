@@ -86,6 +86,17 @@ it.each([39, 54])("rejects unsupported migration %i without writes", async (migr
   expect(existsSync(paths.attachmentsDir)).toBe(false);
 });
 
+it.skipIf(!process.env.T3_V2_FIXTURE_DB || !existsSync(process.env.T3_V2_FIXTURE_DB))("accepts a current v2 thread cursor with retained v1 rows beyond it", () => {
+  const fixture = process.env.T3_V2_FIXTURE_DB!;
+  const db = new Database(fixture, { readonly: true });
+  try {
+    const retainedV1Tail = db.prepare("SELECT MAX(sequence) sequence FROM orchestration_events WHERE application_event_version = 1").get() as { sequence: number | null };
+    const metadata = db.prepare("SELECT last_sequence FROM orchestration_v2_projection_metadata WHERE projection_name = 'thread-projections'").get() as { last_sequence: number };
+    expect(retainedV1Tail.sequence).toBeGreaterThan(metadata.last_sequence);
+    expect(validateTargetDatabase(db)).toMatchObject({ profile: "nightly-v2", migration: 61, integrity: "ok" });
+  } finally { db.close(); }
+});
+
 it("distinguishes a maintenance cursor from a real projection backlog", async () => {
   const paths = createTarget(join(root, "t3"), 50);
   await importConversations([{ conversation: canonicalConversation(root), resume: true }], paths, { dryRun: false, resume: true });

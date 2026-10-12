@@ -118,9 +118,15 @@ function validateNightlyV2(db: Database.Database, names: Set<string>): void {
   if (!metadata || ![1, 2].includes(metadata.schema_version)) {
     throw compatibilityError("Unsupported T3 nightly v2 schema: missing or unsupported thread-projections metadata.");
   }
-  const maxSequence = (db.prepare("SELECT COALESCE(MAX(sequence), 0) maxSequence FROM orchestration_events").get() as { maxSequence: number }).maxSequence;
-  if (metadata.last_sequence < maxSequence) {
-    throw safetyError(`T3 v2 thread projections are behind the event store (projection ${metadata.last_sequence}, events ${maxSequence}). Open T3 and let it finish loading before importing.`);
+  // EventStoreV2.latestSequence() advances only for application-version-2
+  // thread events. Retained v1 events and project events do not move this
+  // thread-projection cursor.
+  const latestV2ThreadSequence = (db.prepare(`
+    SELECT COALESCE(MAX(sequence), 0) maxSequence FROM orchestration_events
+    WHERE application_event_version = 2 AND aggregate_kind = 'thread'
+  `).get() as { maxSequence: number }).maxSequence;
+  if (metadata.last_sequence < latestV2ThreadSequence) {
+    throw safetyError(`T3 v2 thread projections are behind the event store (projection ${metadata.last_sequence}, v2 thread events ${latestV2ThreadSequence}). Open T3 and let it finish loading before importing.`);
   }
 }
 
