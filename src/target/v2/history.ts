@@ -17,6 +17,66 @@ export interface EncodedV2History {
   activities: number;
 }
 
+type ProjectedHistoryRecords = {
+  turnItems?: Array<Record<string, unknown>>;
+  plans?: Array<Record<string, unknown>>;
+};
+
+function sameProjectedValue(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+/** Compare semantic projected history without requiring the source event IDs to match. */
+export function projectedHistoryMatches(
+  records: ProjectedHistoryRecords | undefined,
+  expectedEvents: Array<Record<string, unknown>>,
+  options: { identity?: "exact" | "semantic" } = {},
+): boolean {
+  if (!records?.turnItems || !records.plans) return false;
+  const expectedItems = expectedEvents
+    .filter((event) => event.type === "turn-item.updated")
+    .map((event) => event.payload as Record<string, unknown>);
+  if (records.turnItems.length !== expectedItems.length) return false;
+  if (options.identity === "semantic") {
+    const actualItems = records.turnItems;
+    const identityFields = new Set(["id", "threadId", "messageId", "ordinal"]);
+    const itemsMatch = expectedItems.every((expected, index) => {
+      const actual = actualItems[index];
+      return Boolean(actual && Object.entries(expected).every(([key, item]) =>
+        identityFields.has(key) || sameProjectedValue(actual[key], item)));
+    });
+    if (!itemsMatch) return false;
+    const expectedPlans = expectedEvents
+      .filter((event) => event.type === "plan.updated")
+      .map((event) => event.payload as Record<string, unknown>);
+    if (records.plans.length !== expectedPlans.length) return false;
+    const planIdentityFields = new Set(["id", "threadId", "nodeId"]);
+    return expectedPlans.every((expected, index) => {
+      const actual = records.plans![index];
+      return Boolean(actual && Object.entries(expected).every(([key, item]) =>
+        planIdentityFields.has(key) || sameProjectedValue(actual[key], item)));
+    });
+  }
+  const actualItems = new Map(records.turnItems.map((item) => [item.id, item]));
+  for (const expected of expectedItems) {
+    const actual = actualItems.get(expected.id);
+    if (!actual) return false;
+    for (const [key, item] of Object.entries(expected)) {
+      if (key === "ordinal") continue;
+      if (!sameProjectedValue(actual[key], item)) return false;
+    }
+  }
+  const expectedPlans = expectedEvents
+    .filter((event) => event.type === "plan.updated")
+    .map((event) => event.payload as Record<string, unknown>);
+  if (records.plans.length !== expectedPlans.length) return false;
+  const actualPlans = new Map(records.plans.map((item) => [item.id, item]));
+  return expectedPlans.every((expected) => {
+    const actual = actualPlans.get(expected.id);
+    return Boolean(actual && Object.entries(expected).every(([key, item]) => sameProjectedValue(actual[key], item)));
+  });
+}
+
 const extensionByMime: Record<string, string> = {
   "image/png": ".png",
   "image/jpeg": ".jpg",

@@ -31,7 +31,7 @@ import { safetyError, writeError } from "../core/errors.js";
 import { resolveProviderSelection, type TargetOverrides } from "./config.js";
 import { assertT3Closed, validateTargetDatabase } from "./schema.js";
 import { listImports, recordImports, type LedgerRecord } from "./ledger.js";
-import { encodeCanonicalHistory, type V2HistoryAsset } from "./v2/history.js";
+import { encodeCanonicalHistory, projectedHistoryMatches, type V2HistoryAsset } from "./v2/history.js";
 
 const EVENT_TYPES = [
   "project.created",
@@ -628,31 +628,8 @@ function v2HistoryMatches(value: V2ThreadReply | undefined, plan: V2Plan): boole
         : session.nativeThreadRef === null && session.nativeConversationHeadRef === null));
 }
 
-function jsonEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
-}
-
 function v2ProjectedHistoryMatches(value: V2ThreadReply | undefined, plan: V2Plan): boolean {
-  const records = value?.records;
-  if (!records?.turnItems || !records.plans) return false;
-  const expectedItems = plan.events.filter((event) => event.type === "turn-item.updated").map((event) => event.payload as Record<string, unknown>);
-  if (records.turnItems.length !== expectedItems.length) return false;
-  const actualItems = new Map(records.turnItems.map((item) => [item.id, item]));
-  for (const expected of expectedItems) {
-    const actual = actualItems.get(expected.id);
-    if (!actual) return false;
-    for (const [key, item] of Object.entries(expected)) {
-      if (key === "ordinal") continue;
-      if (!jsonEqual(actual[key], item)) return false;
-    }
-  }
-  const expectedPlans = plan.events.filter((event) => event.type === "plan.updated").map((event) => event.payload as Record<string, unknown>);
-  if (records.plans.length !== expectedPlans.length) return false;
-  const actualPlans = new Map(records.plans.map((item) => [item.id, item]));
-  return expectedPlans.every((expected) => {
-    const actual = actualPlans.get(expected.id);
-    return Boolean(actual && Object.entries(expected).every(([key, item]) => jsonEqual(actual[key], item)));
-  });
+  return projectedHistoryMatches(value?.records, plan.events);
 }
 
 function v2EventOwnershipMatches(value: V2ThreadReply | undefined, plan: V2Plan): boolean {
