@@ -112,7 +112,7 @@ export interface SessionOutcome {
   nextAction: string;
 }
 
-export interface SourceDiscoveryOutcome {
+export interface SessionOutcomeRecord {
   source: SourceName;
   /** Present only when the session identifier was parsed from the source. */
   sessionId?: string;
@@ -122,6 +122,8 @@ export interface SourceDiscoveryOutcome {
   displayName: string;
   outcome: SessionOutcome;
 }
+
+export type SourceDiscoveryOutcome = SessionOutcomeRecord;
 
 export interface SourceDiscoveryResult {
   summaries: SourceSummary[];
@@ -177,6 +179,8 @@ export interface ImportRunResult {
   backup: string | null;
   cache?: CacheResetResult;
   results: ImportItemResult[];
+  /** Source discovery or load failures encountered while building this run. */
+  outcomes?: SessionOutcomeRecord[];
   warnings: string[];
 }
 

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ClaudeSource } from "../src/sources/claude.js";
 import { CodexSource, inferCurrentWorkspace } from "../src/sources/codex.js";
+import { sourceFileErrorCode } from "../src/sources/files.js";
 
 const originalClaudeHome = process.env.CLAUDE_CONFIG_DIR;
 const originalCodexHome = process.env.CODEX_HOME;
@@ -28,6 +29,34 @@ function jsonl(path: string, rows: unknown[]): void {
 }
 
 describe("source adapters", () => {
+  it("classifies a repeatedly changing transcript as retryable", () => {
+    expect(sourceFileErrorCode(new Error("SOURCE_CHANGED_DURING_READ"))).toBe("source-changed-during-read");
+  });
+
+  it("reports child Codex sessions as deferred under their parent", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-codex-child-discovery-"));
+    const workspace = join(root, "workspace");
+    const sessions = join(root, "sessions");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(sessions, { recursive: true });
+    process.env.CODEX_HOME = root;
+    process.env.CODEX_BIN = join(root, "missing-codex-executable");
+    const sessionId = "77777777-7777-4777-8777-777777777777";
+    const path = join(sessions, "child.jsonl");
+    jsonl(path, [{ type: "session_meta", payload: { id: sessionId, cwd: workspace, timestamp: "2026-01-01T00:00:00Z", thread_source: "agent" } }]);
+
+    const adapter = new CodexSource();
+    const discovered = await adapter.discoverWithOutcomes({ workspace });
+    expect(discovered.summaries).toEqual([]);
+    expect(discovered.outcomes).toEqual([expect.objectContaining({
+      source: "codex",
+      sessionId,
+      sourcePath: path,
+      outcome: expect.objectContaining({ kind: "deferred", code: "child-session-contained-by-parent", phase: "discovery", nextAction: expect.stringContaining("parent") }),
+    })]);
+    await adapter.dispose();
+  });
+
   it("reports an unsupported Codex file while retaining valid discovered sessions", async () => {
     const root = await mkdtemp(join(tmpdir(), "t3-import-codex-discovery-outcomes-"));
     const workspace = join(root, "workspace");

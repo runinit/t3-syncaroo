@@ -512,7 +512,10 @@ async function fastSummaries(options: DiscoveryOptions): Promise<SourceDiscovery
         outcomes.push(discoveryOutcome("codex", path, "unsupported-session-format", "unsupported"));
         return undefined;
       }
-      if (header.child) return undefined;
+      if (header.child) {
+        outcomes.push(discoveryOutcome("codex", path, "child-session-contained-by-parent", "deferred", header.id));
+        return undefined;
+      }
       if (options.workspace && canonicalPath(header.workspace) !== canonicalPath(options.workspace)) return undefined;
       const updatedAt = indexedUpdates.get(header.id) ?? fallback;
       if (options.since && new Date(updatedAt) < options.since) return undefined;
@@ -575,8 +578,11 @@ export class CodexSource implements SourceAdapter {
       if (metadata?.parentThreadId) summary.parentId = metadata.parentThreadId;
       if (metadata?.updatedAt !== undefined) summary.updatedAt = appTimestamp(metadata.updatedAt, summary.updatedAt);
     }
-    result.summaries = result.summaries
-      .filter((summary) => !summary.parentId)
+    const parents = result.summaries.filter((summary) => summary.parentId);
+    for (const summary of parents) {
+      result.outcomes.push(discoveryOutcome("codex", summary.path, "child-session-contained-by-parent", "deferred", summary.id));
+    }
+    result.summaries = result.summaries.filter((summary) => !summary.parentId)
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
     result.outcomes.sort((left, right) => left.displayName.localeCompare(right.displayName));
     return result;
