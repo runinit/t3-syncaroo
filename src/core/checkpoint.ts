@@ -32,6 +32,10 @@ export interface NativeProjectionIdentityV1 {
   messages: string[];
   turnItems: string[];
   plans: string[];
+  /** Ordered provider-turn IDs verified against the source checkpoint. */
+  providerTurns?: string[];
+  /** Native lineage fields retained for each imported turn item. */
+  turnItemBindings?: Array<{ providerThreadId: string | null; providerTurnId: string | null; nativeItemRef: unknown | null }>;
 }
 
 export type ImportCheckpoint = ImportCheckpointV1 | ImportCheckpointV2;
@@ -112,7 +116,17 @@ export function parseCheckpoint(value: string | null | undefined): ImportCheckpo
       || projection.messages.length === 0 || projection.turnItems.length === 0
       || ![projection.messages, projection.turnItems, projection.plans].every((ids) => Array.isArray(ids)
         && ids.every((id) => typeof id === "string" && id.length > 0)
-        && new Set(ids).size === ids.length))) return undefined;
+        && new Set(ids).size === ids.length)
+    )) return undefined;
+    if (projection?.providerTurns !== undefined && (!Array.isArray(projection.providerTurns)
+      || projection.providerTurns.some((id) => typeof id !== "string" || id.length === 0)
+      || new Set(projection.providerTurns).size !== projection.providerTurns.length)) return undefined;
+    if (projection?.turnItemBindings !== undefined && (!Array.isArray(projection.turnItemBindings)
+      || projection.turnItemBindings.length !== projection.turnItems.length
+      || projection.turnItemBindings.some((binding) => !binding || typeof binding !== "object"
+        || !(binding.providerThreadId === null || typeof binding.providerThreadId === "string")
+        || !(binding.providerTurnId === null || typeof binding.providerTurnId === "string")
+        || !(binding.nativeItemRef === null || typeof binding.nativeItemRef === "object")))) return undefined;
     return parsed;
   } catch {
     return undefined;

@@ -22,6 +22,7 @@ type ProjectedHistoryRecords = {
   messages?: Array<Record<string, unknown>>;
   turnItems?: Array<Record<string, unknown>>;
   plans?: Array<Record<string, unknown>>;
+  providerTurns?: Array<Record<string, unknown>>;
 };
 
 /** Capture target row identities after the caller has verified semantic history and ownership. */
@@ -30,15 +31,39 @@ export function captureNativeProjectionIdentity(records: ProjectedHistoryRecords
   const ids = [records.messages, records.turnItems, records.plans].map((rows) => rows.map((row) => row.id));
   if (ids[0]?.length === 0 || ids[1]?.length === 0 || !ids.every((items) => items.every((id) => typeof id === "string" && id.length > 0)
     && new Set(items).size === items.length)) return undefined;
-  return { kind: "semantic-native-prefix-v1", messages: ids[0] as string[], turnItems: ids[1] as string[], plans: ids[2] as string[] };
+  let providerTurns: string[] | undefined;
+  if (records.providerTurns) {
+    providerTurns = records.providerTurns.map((row) => row.id as string);
+    if (!providerTurns.every((id) => typeof id === "string" && id.length > 0) || new Set(providerTurns).size !== providerTurns.length) return undefined;
+  }
+  const turnItemBindings = records.turnItems.map((row) => ({
+    providerThreadId: typeof row.providerThreadId === "string" ? row.providerThreadId : null,
+    providerTurnId: typeof row.providerTurnId === "string" ? row.providerTurnId : null,
+    nativeItemRef: row.nativeItemRef && typeof row.nativeItemRef === "object" ? row.nativeItemRef : null,
+  }));
+  return { kind: "semantic-native-prefix-v1", messages: ids[0] as string[], turnItems: ids[1] as string[], plans: ids[2] as string[], ...(providerTurns ? { providerTurns } : {}), turnItemBindings };
 }
 
 /** Require the verified stored identities to remain the ordered prefix of projected history. */
 export function nativeProjectionIdentityMatches(records: ProjectedHistoryRecords | undefined, identity: NativeProjectionIdentityV1): boolean {
   if (!records?.messages || !records.turnItems || !records.plans) return false;
   const actualIds = [records.messages, records.turnItems, records.plans].map((rows) => rows.map((row) => row.id));
-  return [identity.messages, identity.turnItems, identity.plans].every((expected, index) =>
+  const visible = [identity.messages, identity.turnItems, identity.plans].every((expected, index) =>
     expected.every((id, rowIndex) => actualIds[index]?.[rowIndex] === id));
+  if (!visible) return false;
+  if (identity.turnItemBindings) {
+    if (identity.turnItemBindings.length > (records.turnItems?.length ?? 0)
+      || !identity.turnItemBindings.every((expected, index) => {
+        const actual = records.turnItems?.[index];
+        return (actual?.providerThreadId ?? null) === expected.providerThreadId
+          && (actual?.providerTurnId ?? null) === expected.providerTurnId
+          && sameProjectedValue(actual?.nativeItemRef ?? null, expected.nativeItemRef);
+      })) return false;
+  }
+  if (identity.providerTurns) {
+    if (!records.providerTurns || !identity.providerTurns.every((id, index) => records.providerTurns?.[index]?.id === id)) return false;
+  }
+  return true;
 }
 
 function sameProjectedValue(left: unknown, right: unknown): boolean {
@@ -49,15 +74,17 @@ function sameProjectedValue(left: unknown, right: unknown): boolean {
 export function projectedHistoryMatches(
   records: ProjectedHistoryRecords | undefined,
   expectedEvents: Array<Record<string, unknown>>,
-  options: { identity?: "exact" | "semantic" } = {},
+  options: { identity?: "exact" | "semantic" | "native-semantic" } = {},
 ): boolean {
   if (!records?.messages || !records.turnItems || !records.plans) return false;
   const expectedMessages = expectedEvents
     .filter((event) => event.type === "message.updated")
     .map((event) => event.payload as Record<string, unknown>);
   if (records.messages.length !== expectedMessages.length) return false;
-  if (options.identity === "semantic") {
-    const ignoredMessageIdentityFields = new Set(["id", "threadId"]);
+  if (options.identity === "semantic" || options.identity === "native-semantic") {
+    const ignoredMessageIdentityFields = new Set(options.identity === "native-semantic"
+      ? ["id", "threadId", "runId", "nodeId"]
+      : ["id", "threadId"]);
     if (!expectedMessages.every((expected, index) => {
       const actual = records.messages![index];
       return Boolean(actual && Object.entries(expected).every(([key, item]) =>
@@ -74,9 +101,11 @@ export function projectedHistoryMatches(
     .filter((event) => event.type === "turn-item.updated")
     .map((event) => event.payload as Record<string, unknown>);
   if (records.turnItems.length !== expectedItems.length) return false;
-  if (options.identity === "semantic") {
+  if (options.identity === "semantic" || options.identity === "native-semantic") {
     const actualItems = records.turnItems;
-    const identityFields = new Set(["id", "threadId", "messageId", "ordinal"]);
+    const identityFields = new Set(options.identity === "native-semantic"
+      ? ["id", "threadId", "messageId", "ordinal", "runId", "nodeId", "providerThreadId", "providerTurnId", "nativeItemRef", "parentItemId"]
+      : ["id", "threadId", "messageId", "ordinal"]);
     const itemsMatch = expectedItems.every((expected, index) => {
       const actual = actualItems[index];
       return Boolean(actual && Object.entries(expected).every(([key, item]) =>
@@ -87,7 +116,9 @@ export function projectedHistoryMatches(
       .filter((event) => event.type === "plan.updated")
       .map((event) => event.payload as Record<string, unknown>);
     if (records.plans.length !== expectedPlans.length) return false;
-    const planIdentityFields = new Set(["id", "threadId", "nodeId"]);
+    const planIdentityFields = new Set(options.identity === "native-semantic"
+      ? ["id", "threadId", "nodeId", "runId"]
+      : ["id", "threadId", "nodeId"]);
     return expectedPlans.every((expected, index) => {
       const actual = records.plans![index];
       return Boolean(actual && Object.entries(expected).every(([key, item]) =>

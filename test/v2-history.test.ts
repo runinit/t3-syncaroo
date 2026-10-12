@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { captureNativeProjectionIdentity, nativeProjectionIdentityMatches, projectedHistoryMatches } from "../src/target/v2/history.js";
+import { parseCheckpoint } from "../src/core/checkpoint.js";
 
 describe("projectedHistoryMatches", () => {
   it("captures and pins ordered native record IDs separately from semantic content", () => {
@@ -14,11 +15,20 @@ describe("projectedHistoryMatches", () => {
       messages: ["native-message-1", "native-message-2"],
       turnItems: ["native-item-1", "native-item-2"],
       plans: ["native-plan-1"],
+      turnItemBindings: [
+        { providerThreadId: null, providerTurnId: null, nativeItemRef: null },
+        { providerThreadId: null, providerTurnId: null, nativeItemRef: null },
+      ],
     });
     expect(nativeProjectionIdentityMatches(records, identity!)).toBe(true);
     expect(nativeProjectionIdentityMatches({ ...records, messages: [{ id: "replacement" }, records.messages[1]!] }, identity!)).toBe(false);
+    expect(nativeProjectionIdentityMatches({ ...records, turnItems: [{ ...records.turnItems[0], providerTurnId: "foreign" }, records.turnItems[1]!] }, identity!)).toBe(false);
+    const linked = captureNativeProjectionIdentity({ ...records, turnItems: [{ id: "item", providerThreadId: "provider", providerTurnId: "turn", nativeItemRef: { driver: "codex", nativeId: "source-item", strength: "strong" } }] });
+    expect(nativeProjectionIdentityMatches({ ...records, turnItems: [{ id: "item", providerThreadId: "provider", providerTurnId: "other-turn", nativeItemRef: { driver: "codex", nativeId: "source-item", strength: "strong" } }] }, linked!)).toBe(false);
     expect(captureNativeProjectionIdentity({ ...records, messages: [{ id: "duplicate" }, { id: "duplicate" }] })).toBeUndefined();
     expect(captureNativeProjectionIdentity({ ...records, messages: [] })).toBeUndefined();
+    expect(parseCheckpoint(JSON.stringify({ version: 2, turns: [], nativeProjection: identity }))).toMatchObject({ nativeProjection: identity });
+    expect(parseCheckpoint(JSON.stringify({ version: 2, turns: [], nativeProjection: { ...identity!, messages: ["duplicate", "duplicate"] } }))).toBeUndefined();
   });
 
   it("matches complete projected turn items and plans without depending on event IDs", () => {

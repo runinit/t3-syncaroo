@@ -1,5 +1,6 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
+import { basename, join } from "node:path";
 import type { CanonicalConversation, CanonicalThread, ConversationSyncPreview, SyncItemResult, SyncRunResult, TargetPaths } from "../../core/types.js";
 import { isTerminalTurn } from "../../core/types.js";
 import { checkpointForThread, legacyTurnSemanticHash, turnSemanticHash, type ImportCheckpoint, type ImportCheckpointV1, type ImportCheckpointV2, type NativeProjectionIdentityV1 } from "../../core/checkpoint.js";
@@ -8,7 +9,7 @@ import { safetyError } from "../../core/errors.js";
 import { acquireLock, callV2Native, createBackup, materializeAssets, planV2Thread, type V2ThreadReply } from "../importer.js";
 import { captureNativeProjectionIdentity, projectedHistoryMatches, nativeProjectionIdentityMatches } from "./history.js";
 import { assertT3Closed, validateTargetDatabase } from "../schema.js";
-import { listImports, recordImports, type LedgerRecord, type StoredLedgerRecord } from "../ledger.js";
+import { listImports, listImportsForTargets, recordImports, type LedgerRecord, type StoredLedgerRecord } from "../ledger.js";
 
 interface V2SourcePlan {
   conversation: CanonicalConversation;
@@ -29,14 +30,31 @@ interface V2SourcePlan {
 
 function targetId(paths: TargetPaths): string { return sha256(canonicalPath(paths.dbPath)); }
 
-function sourceRecord(paths: TargetPaths, thread: CanonicalThread): StoredLedgerRecord | undefined {
-  const rows = listImports(targetId(paths), thread.source)
+function nativeSequenceRange(target: V2ThreadReply | undefined): { first: number; last: number } | undefined {
+  const sequences = target?.events?.map((event) => event.sequence)
+    .filter((sequence) => Number.isSafeInteger(sequence) && sequence > 0) ?? [];
+  if (!sequences.length) return undefined;
+  return { first: Math.min(...sequences), last: Math.max(...sequences) };
+}
+
+function sourceRecord(paths: TargetPaths, thread: CanonicalThread): { record?: StoredLedgerRecord; ambiguous: boolean } {
+  const currentTargetId = targetId(paths);
+  const targetIds = [currentTargetId];
+  if (basename(paths.dbPath) === "statev2.sqlite") targetIds.push(sha256(canonicalPath(join(paths.stateDir, "state.sqlite"))));
+  const rows = listImportsForTargets(targetIds, thread.source)
     .filter((row) => row.sourceSessionId === thread.sourceSessionId && row.isCanonical !== false && !row.supersededByThreadId);
-  const current = rows.filter((row) => row.sourceKey === thread.sourceKey || row.currentSourceKey === thread.sourceKey);
-  if (current.length === 1) return current[0];
-  if (current.length > 1) return undefined;
-  const resumable = rows.filter((row) => row.resumable);
-  return resumable.length === 1 ? resumable[0] : rows.length === 1 ? rows[0] : undefined;
+  const pick = (candidates: StoredLedgerRecord[]) => {
+    const current = candidates.filter((row) => row.sourceKey === thread.sourceKey || row.currentSourceKey === thread.sourceKey);
+    if (current.length === 1) return { record: current[0]!, ambiguous: false };
+    if (current.length > 1) return { ambiguous: true };
+    const resumable = candidates.filter((row) => row.resumable);
+    if (resumable.length === 1) return { record: resumable[0]!, ambiguous: false };
+    if (resumable.length > 1 || candidates.length > 1) return { ambiguous: true };
+    return candidates.length === 1 ? { record: candidates[0]!, ambiguous: false } : { ambiguous: false };
+  };
+  const currentRows = rows.filter((row) => row.targetId === currentTargetId);
+  const selected = pick(currentRows.length ? currentRows : rows.filter((row) => row.targetId !== currentTargetId));
+  return selected;
 }
 
 function checkpointPrefix(thread: CanonicalThread, checkpoint: ImportCheckpoint | undefined): number | undefined {
@@ -67,7 +85,14 @@ function providerThreadFor(target: V2ThreadReply, threadId: string): Record<stri
   return matches.length === 1 ? matches[0] as Record<string, any> : undefined;
 }
 
-function historyMatchesPrefix(target: V2ThreadReply, plan: ReturnType<typeof planV2Thread>, turns: CanonicalThread["turns"], nativeProjection?: NativeProjectionIdentityV1): boolean {
+function historyMatchesPrefix(
+  target: V2ThreadReply,
+  plan: ReturnType<typeof planV2Thread>,
+  turns: CanonicalThread["turns"],
+  nativeProjection?: NativeProjectionIdentityV1,
+  sourceThread?: CanonicalThread,
+  nativeThread?: Record<string, any>,
+): boolean {
   const records = recordsOf(target);
   const expected = plan.events;
   const expectedMessages = expected.filter((item) => item.type === "message.updated").map((item) => item.payload as Record<string, any>);
@@ -85,7 +110,13 @@ function historyMatchesPrefix(target: V2ThreadReply, plan: ReturnType<typeof pla
       messages: actualMessages.slice(0, nativeProjection.messages.length),
       turnItems: (records.turnItems ?? []).slice(0, nativeProjection.turnItems.length),
       plans: (records.plans ?? []).slice(0, nativeProjection.plans.length),
+      providerTurns: (records.providerTurns ?? []).slice(0, nativeProjection.providerTurns?.length ?? 0),
     }, nativeProjection)) return false;
+    const nativeProviderPrefix = records.providerTurns?.slice(0, nativeProjection.providerTurns?.length ?? 0) ?? [];
+    if (nativeProviderPrefix.length > 0) {
+      if (!sourceThread || !nativeThread || !nativeProjection.providerTurns
+        || !nativeProviderTurnsMatchSourcePrefix(nativeProviderPrefix, sourceThread.turns.slice(0, turns.length), nativeThread)) return false;
+    } else if (nativeProjection.providerTurns === undefined && (records.providerTurns ?? []).length > 0) return false;
     // Rows added after the verified native prefix must retain t3-import's own
     // deterministic IDs; semantic comparison applies only to the saved prefix.
     if (!expectedMessages.slice(nativeProjection.messages.length).every((message, offset) => actualMessages[nativeProjection.messages.length + offset]?.id === message.id)
@@ -96,7 +127,7 @@ function historyMatchesPrefix(target: V2ThreadReply, plan: ReturnType<typeof pla
       turnItems: (records.turnItems ?? []).slice(0, expectedItems.length),
       plans: (records.plans ?? []).slice(0, expectedPlans.length),
     };
-    if (!projectedHistoryMatches(prefixRecords, expected, { identity: "semantic" })) return false;
+    if (!projectedHistoryMatches(prefixRecords, expected, { identity: "native-semantic" })) return false;
     const nativeMessageIds = nativeProjection.messages;
     const actualItems = prefixRecords.turnItems ?? [];
     for (let index = 0; index < expectedItems.length; index++) {
@@ -143,46 +174,265 @@ function historyMatchesPrefix(target: V2ThreadReply, plan: ReturnType<typeof pla
   return JSON.stringify(actualPrefix) === JSON.stringify(expectedOrdered) && turns.length > 0;
 }
 
-function terminalStatus(item: Record<string, any> | undefined): string | undefined {
-  if (!item) return undefined;
-  if (item.status === "interrupted" || item.status === "failed" || item.status === "completed") return item.status;
-  return undefined;
+function nativeProviderTurnsMatchSourcePrefix(
+  providerTurns: Array<Record<string, any>>,
+  sourceTurns: CanonicalThread["turns"],
+  providerThread: Record<string, any>,
+): boolean {
+  const driver = providerThread.driver;
+  if (driver !== "codex" && driver !== "claudeAgent") return false;
+  const sourceOrder: number[] = [];
+  for (const providerTurn of providerTurns) {
+    const native = providerTurn.nativeTurnRef as Record<string, any> | undefined;
+    const matches = sourceTurns.flatMap((turn, index) => {
+      const assistantNodeIds = turn.assistant.flatMap((message) => {
+        const match = /^(.*):text:\d+$/u.exec(message.sourceId);
+        return match?.[1] ? [match[1]] : [];
+      });
+      const nativeIds = driver === "codex" ? [turn.id] : assistantNodeIds.slice(-1);
+      return native && native.driver === driver && nativeIds.includes(String(native.nativeId))
+        && (driver === "codex" ? native.strength === "strong" : (native.strength === "weak" || native.strength === "strong"))
+        && providerTurn.providerThreadId === providerThread.id
+        && providerTurn.status === turn.status
+        && !(driver === "claudeAgent" && String(native.nativeId).startsWith("turn:"))
+        ? [{ index }] : [];
+    });
+    if (matches.length !== 1) return false;
+    sourceOrder.push(matches[0]!.index);
+  }
+  return sourceOrder.every((index, offset) => offset === 0 || index > sourceOrder[offset - 1]!);
 }
 
-function adoptionCount(target: V2ThreadReply, source: CanonicalThread["turns"], prefixLength: number, prefixMessages: number, plan: ReturnType<typeof planV2Thread>): number {
-  const records = recordsOf(target);
-  const messages = records.messages ?? [];
-  const suffix = messages.slice(prefixMessages);
-  const items = records.turnItems ?? [];
-  const expectedById = new Map(plan.events.filter((event) => event.type === "message.updated").map((event) => {
-    const payload = event.payload as Record<string, any>;
-    return [payload.id, payload] as const;
-  }));
-  let cursor = 0;
-  let adopted = 0;
-  for (const turn of source.slice(prefixLength)) {
-    const sourceMessages = [turn.user, ...turn.assistant];
-    const expected = sourceMessages.map((message) => {
-      const id = deterministicUuid(`t3-import:v2:message:${plan.thread.sourceKey}:${message.sourceId}`);
-      const payload = expectedById.get(id);
-      return payload ? { role: payload.role, text: payload.text, attachments: payload.attachments ?? [] } : undefined;
-    });
-    const actual = suffix.slice(cursor, cursor + expected.length);
-    if (actual.length === 0) break;
-    if (actual.length !== expected.length || actual.some((item, i) => {
-      const candidate = expected[i];
-      if (!candidate || item.role !== candidate.role || item.text !== candidate.text) return true;
-      const attachments = (item.attachments ?? []).map((attachment: Record<string, unknown>) => ({ id: attachment.id, name: attachment.name, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes }));
-      return JSON.stringify(attachments) !== JSON.stringify(candidate.attachments);
-    })) return -1;
-    const lastAssistant = actual.at(-1);
-    if (!lastAssistant || lastAssistant.role !== "assistant") return -1;
-    const terminal = items.find((item) => item.messageId === lastAssistant.id);
-    if (terminalStatus(terminal) !== turn.status) return -1;
-    cursor += expected.length;
-    adopted++;
+function nativeContinuationCount(
+  target: V2ThreadReply,
+  records: NonNullable<V2ThreadReply["records"]>,
+  suffixMessages: number,
+  suffixItems: number,
+  suffixPlans: number,
+  sourceTurns: CanonicalThread["turns"],
+  suffixPlansByTurn: Array<ReturnType<typeof planV2Thread>>,
+  driver: "codex" | "claudeAgent",
+  providerThread: Record<string, any>,
+  sourceThread: CanonicalThread,
+  verifiedPrefixTurns: CanonicalThread["turns"],
+  previouslyVerifiedHead?: string,
+  verifiedProviderTurnIds?: string[],
+): number {
+  if (driver === "claudeAgent" && !sourceThread.currentBranch) return -1;
+  if (driver === "claudeAgent") {
+    const expectedHead = sourceThread.resumeCursor?.resumeSessionAt;
+    const nativeHead = providerThread.nativeConversationHeadRef;
+    // Completed Claude adapter runs clear the head. A null head is safe only
+    // alongside the complete, per-turn/node/item lineage proof below.
+    const trustedHeads = new Set([expectedHead, previouslyVerifiedHead].filter((value): value is string => Boolean(value)));
+    if (typeof expectedHead !== "string" || !expectedHead || (nativeHead !== null
+      && (nativeHead?.driver !== driver || nativeHead.strength !== "strong" || !trustedHeads.has(nativeHead.nativeId)))) return -1;
   }
-  return cursor === suffix.length ? adopted : -1;
+  const allTurns = records.providerTurns as Array<Record<string, any>> | undefined;
+  if (!Array.isArray(allTurns) || sourceTurns.length !== suffixPlansByTurn.length) return -1;
+  const previousIds = verifiedProviderTurnIds ?? [];
+  if (allTurns.length !== previousIds.length + sourceTurns.length
+    || !previousIds.every((id, index) => allTurns[index]?.id === id)) return -1;
+  const previousTurns = allTurns.slice(0, previousIds.length);
+  const turns = allTurns.slice(previousIds.length);
+  const matchSourceTurn = (nativeTurn: Record<string, any>, sourceTurn: CanonicalThread["turns"][number]): boolean => {
+    const assistantNodeIds = sourceTurn.assistant.flatMap((message) => {
+      const match = /^(.*):text:\d+$/u.exec(message.sourceId);
+      return match?.[1] ? [match[1]] : [];
+    });
+    const nativeIds = driver === "codex" ? [sourceTurn.id] : assistantNodeIds.slice(-1);
+    const matches = allTurns.filter((turn) => {
+      const native = turn.nativeTurnRef as Record<string, any> | undefined;
+      return native?.driver === driver && typeof native.nativeId === "string" && native.strength !== undefined
+        && nativeIds.includes(native.nativeId) && native.nativeId !== ""
+        && !(driver === "codex" && native.strength !== "strong")
+        && !(driver === "claudeAgent" && native.strength !== "weak" && native.strength !== "strong");
+    });
+    if (matches.length !== 1 || matches[0] !== nativeTurn || nativeTurn.providerThreadId !== providerThread.id) return false;
+    const expectedStatus = sourceTurn.status === "completed" ? "completed" : sourceTurn.status;
+    if (nativeTurn.status !== expectedStatus) return false;
+    return !(driver === "claudeAgent" && String(nativeTurn.nativeTurnRef?.nativeId).startsWith("turn:"));
+  };
+  const sourceOrder = new Map(sourceThread.turns.map((turn, index) => [turn, index]));
+  const matchedSourceOrder: number[] = [];
+  for (let index = 0; index < previousTurns.length; index++) {
+    const nativeTurn = previousTurns[index]!;
+    const matches = verifiedPrefixTurns.filter((sourceTurn) => matchSourceTurn(nativeTurn, sourceTurn));
+    if (matches.length !== 1) return -1;
+    const order = sourceOrder.get(matches[0]!);
+    if (order === undefined) return -1;
+    matchedSourceOrder.push(order);
+  }
+  for (let index = 0; index < sourceTurns.length; index++) {
+    if (!matchSourceTurn(turns[index]!, sourceTurns[index]!)) return -1;
+    const order = sourceOrder.get(sourceTurns[index]!);
+    if (order === undefined) return -1;
+    matchedSourceOrder.push(order);
+  }
+  if (matchedSourceOrder.some((order, index) => index > 0 && order <= matchedSourceOrder[index - 1]!)) return -1;
+
+  const actualMessages = records.messages ?? [];
+  const actualItems = records.turnItems ?? [];
+  const actualPlans = records.plans ?? [];
+  const suffixMessageRows = actualMessages.slice(suffixMessages);
+  const suffixItemRows = actualItems.slice(suffixItems);
+  const messageIds = new Set(suffixMessageRows.map((message) => message.id));
+  const itemIds = new Set(suffixItemRows.map((item) => item.id));
+  if (suffixMessageRows.some((message) => typeof message.id !== "string" || !message.id)
+    || suffixItemRows.some((item) => typeof item.id !== "string" || !item.id)) return -1;
+  if (messageIds.size !== actualMessages.length - suffixMessages || itemIds.size !== actualItems.length - suffixItems) return -1;
+  let messageOffset = suffixMessages;
+  let itemOffset = suffixItems;
+  let planOffset = suffixPlans;
+  for (let turnIndex = 0; turnIndex < sourceTurns.length; turnIndex++) {
+    const turn = sourceTurns[turnIndex]!;
+    const turnPlan = suffixPlansByTurn[turnIndex]!;
+    const messagesExpected = turnPlan.events.filter((event) => event.type === "message.updated").length;
+    const itemsExpected = turnPlan.events.filter((event) => event.type === "turn-item.updated").length;
+    const plansExpected = turnPlan.events.filter((event) => event.type === "plan.updated").length;
+    const projection = {
+      messages: actualMessages.slice(messageOffset, messageOffset + messagesExpected),
+      turnItems: actualItems.slice(itemOffset, itemOffset + itemsExpected),
+      plans: actualPlans.slice(planOffset, planOffset + plansExpected),
+    };
+    const normalized = nativeExpectedTurnEvents(turnPlan, turn, driver);
+    if (!projectedHistoryMatches(projection, normalized.events, { identity: "native-semantic" })) return -1;
+    const providerTurnId = turns[turnIndex]?.id;
+    if (!providerTurnId) return -1;
+    const actualTurnMessages = projection.messages;
+    for (let index = 0; index < projection.turnItems.length; index++) {
+      const item = projection.turnItems[index]!;
+      const expected = normalized.events.filter((event) => event.type === "turn-item.updated")[index]?.payload as Record<string, any> | undefined;
+      if (!expected) return -1;
+      const userMessage = expected.type === "user_message";
+      if (userMessage) {
+        if (item.providerTurnId !== null && item.providerTurnId !== undefined && item.providerTurnId !== providerTurnId) return -1;
+      } else if (item.providerTurnId !== providerTurnId) return -1;
+      if (item.providerThreadId !== null && item.providerThreadId !== undefined && item.providerThreadId !== providerThread.id) return -1;
+      if (typeof expected.messageId === "string") {
+        const expectedMessageIndex = normalized.events.filter((event) => event.type === "message.updated")
+          .findIndex((event) => (event.payload as Record<string, any>).id === expected.messageId);
+        if (expectedMessageIndex < 0 || item.messageId !== actualTurnMessages[expectedMessageIndex]?.id) return -1;
+        const sourceNativeId = normalized.messageNativeIds.get(expected.messageId);
+        if (sourceNativeId && item.nativeItemRef !== null && item.nativeItemRef !== undefined) {
+          const nativeItem = item.nativeItemRef as Record<string, any> | null | undefined;
+          if (nativeItem?.driver !== driver || nativeItem.strength !== "strong" || nativeItem.nativeId !== sourceNativeId) return -1;
+        }
+      } else if (item.messageId !== null && item.messageId !== undefined
+        && (typeof item.messageId !== "string" || !messageIds.has(item.messageId))) return -1;
+    }
+    messageOffset += messagesExpected;
+    itemOffset += itemsExpected;
+    planOffset += plansExpected;
+  }
+  return messageOffset === actualMessages.length && itemOffset === actualItems.length && planOffset === actualPlans.length
+    ? sourceTurns.length
+    : -1;
+}
+
+function nativeExpectedTurnEvents(
+  plan: ReturnType<typeof planV2Thread>,
+  turn: CanonicalThread["turns"][number],
+  driver: "codex" | "claudeAgent",
+): { events: Array<Record<string, unknown>>; messageNativeIds: Map<string, string> } {
+  const messages = plan.events.filter((event) => event.type === "message.updated");
+  const messageNativeIds = new Map<string, string>();
+  for (const sourceMessage of [turn.user, ...turn.assistant]) {
+    const id = deterministicUuid(`t3-import:v2:message:${plan.thread.sourceKey}:${sourceMessage.sourceId}`);
+    const nativeId = driver === "claudeAgent" && sourceMessage.role === "assistant"
+      ? /^(.*):text:\d+$/u.exec(sourceMessage.sourceId)?.[1]
+      : sourceMessage.sourceId;
+    if (nativeId) messageNativeIds.set(id, nativeId);
+  }
+  if (driver !== "claudeAgent") return { events: plan.events, messageNativeIds };
+
+  const nodeGroups = new Map<string, Array<{ sourceId: string; text: string }>>();
+  for (const message of turn.assistant) {
+    const nodeId = /^(.*):text:\d+$/u.exec(message.sourceId)?.[1];
+    if (!nodeId) return { events: [], messageNativeIds: new Map() };
+    nodeGroups.set(nodeId, [...(nodeGroups.get(nodeId) ?? []), message]);
+  }
+  const collapsed = new Map<string, { firstMessageId: string; text: string; sourceId: string }>();
+  for (const [nodeId, group] of nodeGroups) {
+    if (!group.length) continue;
+    const first = group[0]!;
+    const firstMessageId = deterministicUuid(`t3-import:v2:message:${plan.thread.sourceKey}:${first.sourceId}`);
+    collapsed.set(nodeId, { firstMessageId, text: group.map((message) => message.text).join(""), sourceId: first.sourceId });
+  }
+  const droppedMessageIds = new Set<string>();
+  for (const group of nodeGroups.values()) for (const message of group.slice(1)) {
+    droppedMessageIds.add(deterministicUuid(`t3-import:v2:message:${plan.thread.sourceKey}:${message.sourceId}`));
+  }
+  const eventById = new Map<string, Record<string, unknown>>();
+  for (const event of plan.events) {
+    if (event.type === "message.updated") {
+      const payload = event.payload as Record<string, any>;
+      if (droppedMessageIds.has(payload.id)) continue;
+      const group = [...collapsed.entries()].find(([, value]) => value.firstMessageId === payload.id)?.[1];
+      eventById.set(String(event.id), group ? { ...event, payload: { ...payload, text: group.text } } : event);
+      continue;
+    }
+    if (event.type === "turn-item.updated") {
+      const payload = event.payload as Record<string, any>;
+      if (droppedMessageIds.has(payload.messageId)) continue;
+      const group = [...collapsed.entries()].find(([, value]) => value.firstMessageId === payload.messageId)?.[1];
+      eventById.set(String(event.id), group ? { ...event, payload: { ...payload, text: group.text } } : event);
+      continue;
+    }
+    eventById.set(String(event.id), event);
+  }
+  for (const dropped of droppedMessageIds) messageNativeIds.delete(dropped);
+  return { events: [...eventById.values()], messageNativeIds };
+}
+
+function adoptionCount(
+  target: V2ThreadReply,
+  prefixMessages: number,
+  prefixItems: number,
+  prefixPlans: number,
+  plan: ReturnType<typeof planV2Thread>,
+  sourceThread: CanonicalThread,
+  prefixTurns: CanonicalThread["turns"],
+  sourceTurns: CanonicalThread["turns"],
+  suffixPlansByTurn: Array<ReturnType<typeof planV2Thread>>,
+  providerThread: Record<string, any>,
+  record: StoredLedgerRecord,
+): number {
+  const records = recordsOf(target);
+  const expectedMessages = plan.events.filter((event) => event.type === "message.updated");
+  const expectedItems = plan.events.filter((event) => event.type === "turn-item.updated");
+  const expectedPlans = plan.events.filter((event) => event.type === "plan.updated");
+  const actualMessages = records.messages ?? [];
+  const actualItems = records.turnItems ?? [];
+  const actualPlans = records.plans ?? [];
+  const suffixRecords = {
+    messages: actualMessages.slice(prefixMessages),
+    turnItems: actualItems.slice(prefixItems),
+    plans: actualPlans.slice(prefixPlans),
+  };
+  if (suffixRecords.messages.length === 0) {
+    const expectedProviderTurnCount = record.checkpoint?.version === 2
+      ? record.checkpoint.nativeProjection?.providerTurns?.length ?? 0
+      : 0;
+    const actualProviderTurnCount = Array.isArray(records.providerTurns) ? records.providerTurns.length : 0;
+    return suffixRecords.turnItems.length === 0 && suffixRecords.plans.length === 0
+      && actualProviderTurnCount === expectedProviderTurnCount ? 0 : -1;
+  }
+  if (suffixRecords.messages.length !== expectedMessages.length
+    || suffixRecords.turnItems.length !== expectedItems.length
+    || suffixRecords.plans.length !== expectedPlans.length) return -1;
+  if (projectedHistoryMatches(suffixRecords, plan.events, { identity: "exact" })) {
+    const ownedEvents = new Set((target.events ?? []).map((event) => event.id));
+    if (Array.isArray(target.events) && plan.events.filter((event) => ["message.updated", "turn-item.updated", "plan.updated"].includes(String(event.type)))
+      .every((event) => ownedEvents.has(String(event.id)))) return plan.thread.turns.length;
+  }
+  const source = plan.thread.source;
+  if (source !== "codex" && source !== "claude") return -1;
+  const provider = providerThreadFor(target, plan.threadId);
+  const driver = source === "codex" ? "codex" : "claudeAgent";
+  if (!provider || provider.driver !== driver || provider.providerInstanceId !== plan.provider.instanceId) return -1;
+  return nativeContinuationCount(target, records, prefixMessages, prefixItems, prefixPlans, sourceTurns, suffixPlansByTurn, driver, provider, sourceThread,
+    prefixTurns, record.nativeConversationHeadId, record.checkpoint?.version === 2 ? record.checkpoint.nativeProjection?.providerTurns : undefined);
 }
 
 async function inspectV2(paths: TargetPaths, threadId: string): Promise<V2ThreadReply | undefined> {
@@ -195,8 +445,10 @@ async function buildV2Plan(conversation: CanonicalConversation, paths: TargetPat
   if (!source) throw safetyError(`Conversation ${conversation.summary.id} has no importable task.`);
   const turns = source.turns.filter(isTerminalTurn);
   const thread = { ...source, turns, ignoredInProgressTurns: source.ignoredInProgressTurns ?? source.turns.filter((turn) => !isTerminalTurn(turn)).length };
-  const record = sourceRecord(paths, thread);
-  if (!record) return { conversation, thread, status: "not-imported", added: [], adopted: 0, warnings: ["Conversation has not been imported into this T3 database or its source mapping is ambiguous."], resumable: false };
+  const mapping = sourceRecord(paths, thread);
+  const record = mapping.record;
+  if (!record) return { conversation, thread, status: mapping.ambiguous ? "history-diverged" : "not-imported", added: [], adopted: 0,
+    warnings: [mapping.ambiguous ? "More than one active source mapping exists for this task. Preserve the existing tasks and resolve the mapping before synchronization." : "Conversation has not been imported into this T3 database."], resumable: false };
   if (thread.source === "claude" && conversation.summary.branches > 1
     && conversation.threads.filter((candidate) => candidate.currentBranch).length !== 1) {
     return { conversation, thread, record, status: "branch-sync-unsupported", added: [], adopted: 0,
@@ -223,7 +475,7 @@ async function buildV2Plan(conversation: CanonicalConversation, paths: TargetPat
   if (thread.source === "claude" && record.resumable) {
     const headId = oldHead && oldHead.driver === sourceDriver && oldHead.strength === "strong" ? oldHead.nativeId : undefined;
     const expectedHeads = new Set([record.nativeConversationHeadId, currentSourceHead].filter((value): value is string => Boolean(value)));
-    if (!headId || !expectedHeads.has(headId)) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["The Claude conversation head no longer matches the imported branch; synchronization left it unchanged."], resumable: record.resumable };
+    if (oldHead !== null && (!headId || !expectedHeads.has(headId))) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["The Claude conversation head no longer matches the imported branch; synchronization left it unchanged."], resumable: record.resumable };
   } else if (oldHead !== null) {
     return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["The imported provider binding contains an unexpected conversation head; synchronization left it unchanged."], resumable: record.resumable };
   }
@@ -235,9 +487,17 @@ async function buildV2Plan(conversation: CanonicalConversation, paths: TargetPat
   const fullPlan = planV2Thread({ conversation, resume: record.resumable }, identityThread, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId), plannerOptions);
   const expectedPrefix = { ...identityThread, turns: thread.turns.slice(0, checkpointLength) };
   const prefixPlan = planV2Thread({ conversation, resume: record.resumable }, expectedPrefix, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId), plannerOptions);
-  if (!historyMatchesPrefix(target, prefixPlan, expectedPrefix.turns, nativeProjection)) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["T3 history no longer matches the imported source prefix; synchronization left the task unchanged."], resumable: record.resumable };
+  if (!historyMatchesPrefix(target, prefixPlan, expectedPrefix.turns, nativeProjection, thread, nativeThread)) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["T3 history no longer matches the imported source prefix; synchronization left the task unchanged."], resumable: record.resumable };
   const prefixMessageCount = prefixPlan.messages.length;
-  const adopted = adoptionCount(target, thread.turns, checkpointLength, prefixMessageCount, fullPlan);
+  const prefixItemCount = prefixPlan.events.filter((event) => event.type === "turn-item.updated").length;
+  const prefixPlanCount = prefixPlan.events.filter((event) => event.type === "plan.updated").length;
+  const suffixTurns = thread.turns.slice(checkpointLength);
+  const suffixPlan = suffixTurns.length
+    ? planV2Thread({ conversation, resume: record.resumable }, { ...identityThread, turns: suffixTurns }, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId), plannerOptions)
+    : undefined;
+  const suffixPlansByTurn = suffixTurns.map((turn) => planV2Thread({ conversation, resume: record.resumable }, { ...identityThread, turns: [turn] }, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId), plannerOptions));
+  const adopted = suffixPlan ? adoptionCount(target, prefixMessageCount, prefixItemCount, prefixPlanCount, suffixPlan,
+    thread, thread.turns.slice(0, checkpointLength), suffixTurns, suffixPlansByTurn, nativeThread, record) : 0;
   if (adopted < 0) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["T3 contains an ambiguous, partial, active, or divergent turn suffix; synchronization left the task unchanged."], resumable: record.resumable };
   const added = thread.turns.slice(checkpointLength + adopted);
   const warnings = [...thread.warnings, ...((thread.ignoredInProgressTurns ?? 0) > 0 ? [`Ignored ${thread.ignoredInProgressTurns} active or indeterminate source turn(s).`] : [])];
@@ -334,8 +594,9 @@ export async function syncV2Conversations(selections: Array<{ conversation: Cano
     for (const plan of writable) {
       const record = plan.record!;
       let projectedAfterWrite = plan.target?.records;
-      let lastSequence = record.lastSequence;
-      let firstSequence = record.lastSequence + 1;
+      const migratedRange = record.targetId === targetId(paths) ? undefined : nativeSequenceRange(plan.target);
+      let lastSequence = migratedRange?.last ?? record.lastSequence;
+      let firstSequence = migratedRange?.first ?? record.lastSequence + 1;
       if (plan.events?.length) {
         const binding = plan.providerThread!;
         const head = binding.nativeConversationHeadRef ?? null;
@@ -371,7 +632,7 @@ export async function syncV2Conversations(selections: Array<{ conversation: Cano
         if (!identity) throw safetyError(`T3 did not return projected native history identities for ${plan.thread.sourceSessionId}; the verified backup is ${backup ?? record.backupPath}.`);
         checkpoint.nativeProjection = identity;
       }
-      ledger.push({ ...record, sourceFingerprint: plan.conversation.fingerprint, currentSourceKey: plan.thread.sourceKey,
+      ledger.push({ ...record, targetId: targetId(paths), firstSequence, sourceFingerprint: plan.conversation.fingerprint, currentSourceKey: plan.thread.sourceKey,
         ...(plan.thread.leafId ? { sourceLeafId: plan.thread.leafId } : {}), sourceTitle: plan.thread.title,
         ...(plan.thread.source === "claude" && plan.resumable && plan.nativeHeadId ? { nativeConversationHeadId: plan.nativeHeadId } : {}),
         checkpoint, syncedAt: new Date().toISOString(), migration: schema.migration,
