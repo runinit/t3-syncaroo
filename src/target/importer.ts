@@ -452,6 +452,7 @@ export interface V2ThreadReply {
     providerTurns?: Array<Record<string, unknown>>;
     providerThreads?: Array<{ id: string; appThreadId?: string; driver?: string; providerInstanceId?: string; nativeThreadRef?: { driver?: string; nativeId?: string; strength?: string } | null; nativeConversationHeadRef?: { driver?: string; nativeId?: string; strength?: string } | null }>;
   };
+  snapshot?: { projection?: { thread?: Record<string, unknown> } };
 }
 
 export interface V2NativeReply {
@@ -463,7 +464,10 @@ export interface V2NativeReply {
   projectionMetadata?: { schemaVersion: number; lastSequence: number } | null;
   threads?: V2ThreadReply[];
   projects?: Array<{ id?: string; projectId?: string; workspaceRoot?: string; deletedAt?: string | null; [key: string]: unknown }>;
-  outcome?: "written" | "already-present" | "write-failed";
+  outcome?: "written" | "already-present" | "write-failed" | "replaced" | "already-replaced" | "replace-conflict" | "readback-conflict";
+  reason?: string;
+  replacementThreadId?: string;
+  storedSequences?: Array<{ eventId: string; threadId: string; sequence: number }>;
   sequences?: number[];
   firstSequence?: number;
   lastSequence?: number;
@@ -476,6 +480,7 @@ export interface V2NativeReply {
 export interface V2Plan {
   thread: CanonicalThread;
   threadId: string;
+  identitySeed: string;
   projectId: string;
   provider: ReturnType<typeof resolveProviderSelection>;
   events: Array<Record<string, unknown>>;
@@ -487,6 +492,13 @@ export interface V2Plan {
   messages: Array<{ role: string; text: string }>;
   resumable: boolean;
   fingerprint: string;
+}
+
+export interface V2PlanOptions {
+  threadId?: string;
+  identitySeed?: string;
+  /** Replacement may preserve or decline an existing binding, but never force one. */
+  disableResume?: boolean;
 }
 
 function v2HelperPath(): string {
@@ -519,6 +531,10 @@ export function callV2Native(paths: TargetPaths, request: Record<string, unknown
         return;
       }
       if (response.ok !== true) {
+        if (request.op === "replace") {
+          resolve(response);
+          return;
+        }
         const recovery = response.projectCommitted && !response.projectCompensated
           ? " A project was created but could not be removed; restore the verified backup before retrying."
           : "";
@@ -531,17 +547,18 @@ export function callV2Native(paths: TargetPaths, request: Record<string, unknown
   });
 }
 
-export function planV2Thread(selection: ImportSelection, thread: CanonicalThread, paths: TargetPaths, projectId: string, createProject: boolean, providerInstance?: string): V2Plan {
+export function planV2Thread(selection: ImportSelection, thread: CanonicalThread, paths: TargetPaths, projectId: string, createProject: boolean, providerInstance?: string, options: V2PlanOptions = {}): V2Plan {
   if (!thread.currentBranch && thread.source === "codex") throw safetyError(`Codex session ${thread.sourceSessionId} has a non-current branch; branch history is not supported by this T3 v2 import slice.`);
   if (!thread.turns.length || thread.turns.some((turn) => turn.status === "inProgress")) {
     throw safetyError(`${thread.source} session ${thread.sourceSessionId} is not settled. Select a completed, interrupted, or failed conversation.`);
   }
   const compacted = compactThreadForImport(thread);
-  const threadId = thread.source === "codex" && /^[0-9a-f-]{36}$/iu.test(thread.sourceSessionId)
+  const identitySeed = options.identitySeed ?? thread.sourceKey;
+  const threadId = options.threadId ?? (thread.source === "codex" && /^[0-9a-f-]{36}$/iu.test(thread.sourceSessionId)
     ? thread.sourceSessionId
-    : deterministicUuid(`t3-import:thread:${thread.sourceKey}`);
+    : deterministicUuid(`t3-import:thread:${thread.sourceKey}`));
   const provider = resolveProviderSelection(paths, thread.source, thread.model, thread.effort, providerInstance);
-  const providerThreadId = deterministicUuid(`t3-import:v2:provider-thread:${thread.sourceKey}`);
+  const providerThreadId = deterministicUuid(`t3-import:v2:provider-thread:${identitySeed}`);
   const createdAt = thread.createdAt;
   const updatedAt = thread.updatedAt;
   const title = thread.title.trim() || "Untitled thread";
@@ -560,7 +577,7 @@ export function planV2Thread(selection: ImportSelection, thread: CanonicalThread
   const nativeHead = thread.source === "claude" && typeof cursor.resumeSessionAt === "string" ? cursor.resumeSessionAt : undefined;
   const nativeDriver = provider.providerName;
   const canResume = thread.source === "codex" ? Boolean(cursor.threadId) : Boolean(nativeHead);
-  const resumable = optionsResume(selection, thread, canResume);
+  const resumable = !options.disableResume && optionsResume(selection, thread, canResume);
   const nativeProviderThread = {
     id: providerThreadId, driver: nativeDriver, providerInstanceId: provider.instanceId, providerSessionId: null,
     appThreadId: threadId, ownerNodeId: null,
@@ -569,12 +586,13 @@ export function planV2Thread(selection: ImportSelection, thread: CanonicalThread
     status: "idle", firstRunOrdinal: null, lastRunOrdinal: null,
     handoffIds: [], forkedFrom: null, pendingBackgroundTasks: [], createdAt, updatedAt,
   };
-  const history = encodeCanonicalHistory(compacted, threadId, paths.attachmentsDir, thread.turns);
+  const historyThread = identitySeed === thread.sourceKey ? compacted : { ...compacted, sourceKey: identitySeed };
+  const history = encodeCanonicalHistory(historyThread, threadId, paths.attachmentsDir, thread.turns);
   const events: Array<Record<string, unknown>> = [{
-    id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:thread-created`), type: "thread.created",
+    id: deterministicUuid(`t3-import:v2:event:${identitySeed}:thread-created`), type: "thread.created",
     threadId, providerInstanceId: provider.instanceId, occurredAt: createdAt, payload: appThread,
   }, ...history.events, {
-    id: deterministicUuid(`t3-import:v2:event:${thread.sourceKey}:provider-thread`), type: "provider-thread.updated",
+    id: deterministicUuid(`t3-import:v2:event:${identitySeed}:provider-thread`), type: "provider-thread.updated",
     threadId, driver: nativeDriver, providerInstanceId: provider.instanceId, occurredAt: updatedAt,
     payload: nativeProviderThread,
   }];
@@ -591,7 +609,7 @@ export function planV2Thread(selection: ImportSelection, thread: CanonicalThread
     },
   } : undefined;
   return {
-    thread, threadId, projectId, provider, events,
+    thread, threadId, identitySeed, projectId, provider, events,
     ...(projectEvent ? { projectEvent } : {}), messages: history.messages, assets: history.assets,
     warnings: [...compacted.warnings.slice(thread.warnings.length), ...history.warnings],
     activities: history.activities, attachments: history.assets.length,
@@ -651,7 +669,7 @@ function v2LedgerRecord(plan: V2Plan, paths: TargetPaths, firstSequence: number,
     importedAt: new Date().toISOString(), importerVersion: IMPORTER_VERSION,
     migration: 61, firstSequence, lastSequence,
     resumable: plan.resumable, backupPath, warnings,
-    identitySeed: plan.thread.sourceKey, currentSourceKey: plan.thread.sourceKey,
+    identitySeed: plan.identitySeed, currentSourceKey: plan.thread.sourceKey,
     ...(plan.thread.leafId ? { sourceLeafId: plan.thread.leafId } : {}),
     ...(plan.resumable && plan.thread.source === "claude" && typeof plan.thread.resumeCursor?.resumeSessionAt === "string" ? { nativeConversationHeadId: plan.thread.resumeCursor.resumeSessionAt } : {}),
     sourceTitle: plan.thread.title, checkpoint: checkpointForThread(plan.thread), isCanonical: true,
