@@ -1,7 +1,7 @@
 import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
-import { existsSync, rmSync } from "node:fs";
-import { basename, join } from "node:path";
+import { closeSync, fsyncSync, lstatSync, openSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
 import type {
   CanonicalConversation,
   CanonicalThread,
@@ -73,6 +73,131 @@ function replacementLedgerRows(paths: TargetPaths, source: string): StoredLedger
   return [...byThread.values()];
 }
 
+type ReplacementReceipt = {
+  version: 1;
+  targetId: string;
+  oldThreadIds: string[];
+  oldShellHashes: Record<string, string>;
+  replacementThreadId: string;
+  backupPath: string;
+  backupSha256: string;
+};
+
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value).sort(([left], [right]) => left.localeCompare(right));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableJson(item)}`).join(",")}}`;
+  }
+  return value === undefined ? "null" : JSON.stringify(value);
+}
+
+function replacementReceiptPath(paths: TargetPaths, plan: ReplacementPlan): string {
+  const identity = JSON.stringify({ targetId: targetHash(paths), oldThreadIds: plan.oldRecords.map((record) => record.threadId), replacementThreadId: plan.planned!.threadId });
+  return join(paths.stateDir, "t3-import-backups", `replacement-${sha256(identity)}.json`);
+}
+
+function receiptShellHashes(plan: ReplacementPlan): Record<string, string> {
+  const hashes: Record<string, string> = {};
+  for (const record of plan.oldRecords) {
+    const shell = projectedThread(plan.oldThreads?.find((value) => value.threadId === record.threadId));
+    if (!shell) throw safetyError("The native helper did not return every old task shell needed for the replacement backup receipt.");
+    hashes[record.threadId] = sha256(stableJson(shell));
+  }
+  return hashes;
+}
+
+async function verifyReceiptBackup(paths: TargetPaths, receipt: ReplacementReceipt): Promise<void> {
+  const backupDirectory = resolve(paths.stateDir, "t3-import-backups");
+  const backupPath = resolve(receipt.backupPath);
+  const relativeBackup = relative(backupDirectory, backupPath);
+  if (!relativeBackup || relativeBackup === ".." || relativeBackup.startsWith(`..${sep}`) || isAbsolute(relativeBackup)) {
+    throw safetyError("The replacement backup receipt points outside the target backup directory.");
+  }
+  const file = lstatSync(backupPath);
+  if (!file.isFile() || file.isSymbolicLink() || sha256(readFileSync(backupPath)) !== receipt.backupSha256) {
+    throw safetyError("The replacement backup receipt no longer matches its verified backup file.");
+  }
+  const backupDb = new Database(backupPath, { readonly: true, fileMustExist: true });
+  try {
+    if (String(backupDb.pragma("integrity_check", { simple: true })) !== "ok") {
+      throw safetyError("The replacement backup receipt points to a backup that failed its integrity check.");
+    }
+  } finally { backupDb.close(); }
+  const readback = await inspect({ ...paths, dbPath: backupPath }, [...receipt.oldThreadIds, receipt.replacementThreadId]);
+  if (!readback.ok || readback.integrity !== "ok") throw safetyError("The replacement backup could not be inspected with the pinned native helper.");
+  const threads = new Map((readback.threads ?? []).map((value) => [value.threadId, value as NativeThread]));
+  if (threads.get(receipt.replacementThreadId)?.exists !== false) throw safetyError("The replacement backup already contains the deterministic new task; it is not a pre-mutation snapshot.");
+  for (const threadId of receipt.oldThreadIds) {
+    const value = threads.get(threadId);
+    const shell = projectedThread(value);
+    if (!value?.exists || !shell || sha256(stableJson(shell)) !== receipt.oldShellHashes[threadId]) {
+      throw safetyError("The replacement backup does not contain the exact pre-mutation task shell recorded in its receipt.");
+    }
+  }
+}
+
+async function readReplacementReceipt(paths: TargetPaths, plan: ReplacementPlan): Promise<ReplacementReceipt | undefined> {
+  const path = replacementReceiptPath(paths, plan);
+  try { lstatSync(path); }
+  catch (error) {
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
+    throw error;
+  }
+  let receipt: ReplacementReceipt;
+  try {
+    const file = lstatSync(path);
+    if (!file.isFile() || file.isSymbolicLink() || (file.mode & 0o077) !== 0) {
+      throw new Error("receipt is not a private regular file");
+    }
+    receipt = JSON.parse(readFileSync(path, "utf8")) as ReplacementReceipt;
+  } catch (error) {
+    throw safetyError(`The replacement recovery receipt cannot be read safely (${error instanceof Error ? error.message : String(error)}).`);
+  }
+  const expectedIds = plan.oldRecords.map((record) => record.threadId);
+  if (receipt.version !== 1 || receipt.targetId !== targetHash(paths) || receipt.replacementThreadId !== plan.planned!.threadId
+    || stableJson(receipt.oldThreadIds) !== stableJson(expectedIds)
+    || !receipt.oldShellHashes || stableJson(Object.keys(receipt.oldShellHashes).sort()) !== stableJson([...expectedIds].sort())
+    || typeof receipt.backupPath !== "string" || typeof receipt.backupSha256 !== "string") {
+    throw safetyError("The replacement recovery receipt does not belong to this exact target/task replacement.");
+  }
+  await verifyReceiptBackup(paths, receipt);
+  return receipt;
+}
+
+async function writeReplacementReceipt(paths: TargetPaths, plan: ReplacementPlan, backupPath: string): Promise<ReplacementReceipt> {
+  const receipt: ReplacementReceipt = {
+    version: 1, targetId: targetHash(paths), oldThreadIds: plan.oldRecords.map((record) => record.threadId),
+    oldShellHashes: receiptShellHashes(plan), replacementThreadId: plan.planned!.threadId,
+    backupPath, backupSha256: sha256(readFileSync(backupPath)),
+  };
+  await verifyReceiptBackup(paths, receipt);
+  const destination = replacementReceiptPath(paths, plan);
+  const temporary = `${destination}.${randomUUID()}.tmp`;
+  let descriptor: number | undefined;
+  try {
+    descriptor = openSync(temporary, "wx", 0o600);
+    writeFileSync(descriptor, JSON.stringify(receipt));
+    fsyncSync(descriptor);
+    closeSync(descriptor);
+    descriptor = undefined;
+    renameSync(temporary, destination);
+    const directory = openSync(join(paths.stateDir, "t3-import-backups"), "r");
+    try { fsyncSync(directory); } finally { closeSync(directory); }
+  } catch (error) {
+    if (descriptor !== undefined) closeSync(descriptor);
+    rmSync(temporary, { force: true });
+    throw writeError(`Could not persist the replacement recovery receipt: ${error instanceof Error ? error.message : String(error)}`, error);
+  }
+  const info = lstatSync(destination);
+  if (!info.isFile() || info.isSymbolicLink() || (info.mode & 0o077) !== 0) throw safetyError("The replacement recovery receipt permissions are not private.");
+  return receipt;
+}
+
+function removeReplacementReceipt(paths: TargetPaths, plan: ReplacementPlan): void {
+  rmSync(replacementReceiptPath(paths, plan), { force: true });
+}
+
 export function replacementThreadId(sourceKey: string, oldThreadId: string): string {
   return deterministicUuid(`t3-import:replacement:${sourceKey}:${oldThreadId}`);
 }
@@ -102,6 +227,10 @@ function item(
     ...(oldRecords.length > 1 ? { oldThreadIds: oldRecords.map((record) => record.threadId) } : {}),
     warnings: [...thread.warnings, ...(consolidation ? [consolidation] : []), ...(warning ? [warning] : [])],
   };
+}
+
+function alreadyCurrentItem(thread: CanonicalThread, oldRecords: StoredLedgerRecord[], newThreadId: string, projectId: string): ReplaceItemResult {
+  return { ...item(thread, "already-current", oldRecords), newThreadId, projectId };
 }
 
 function primaryRecord(rows: StoredLedgerRecord[], thread: CanonicalThread): StoredLedgerRecord | undefined {
@@ -260,7 +389,7 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
           recoverySequences: [
             ...(candidate.events ?? []).map((event) => ({ eventId: event.id, threadId: newThreadId, sequence: event.sequence })),
             ...oldThreads.flatMap((value) => (value.events ?? []).map((event) => ({ eventId: event.id, threadId: value.threadId, sequence: event.sequence }))),
-          ], result: item(thread, "already-current", oldRecords) };
+          ], result: alreadyCurrentItem(thread, oldRecords, newThreadId, oldRecord.projectId) };
       }
     }
   }
@@ -269,6 +398,7 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
   const mayVerifyUpgrade = oldRecord.targetId !== targetHash(paths) && projectedThread(source)?.historyOrigin === "v1_import";
   if (!source || !projectedThread(source) || (!marker && !mayVerifyUpgrade && !hasOwnedCreation(source, oldRecord))
     || projectedThread(source)?.projectId !== oldRecord.projectId
+    || (mayVerifyUpgrade && !liveNative(source))
     || (!marker && !mayVerifyUpgrade && projectedThread(source)?.historyOrigin !== "v1_import")) {
     return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
       result: item(thread, "target-missing", oldRecords, "The native task no longer matches its canonical ledger owner.") };
@@ -335,6 +465,8 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
   if (!binding || !providerInstance || binding.status !== "idle") {
     if (!upgradedPrefix) return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
       result: item(thread, "active-source", oldRecords, "The imported provider session is active or its native binding cannot be verified.") };
+    if (binding && binding.status !== "idle") return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
+      result: item(thread, "active-source", oldRecords, "The converted provider session is active; retry replacement after it settles.") };
   }
   const canContinue = upgradedPrefix
     ? oldRecord.resumable
@@ -360,7 +492,7 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
       : binding!.nativeThreadRef === null && binding!.nativeConversationHeadRef === null);
   if (!upgradedPrefix && unchanged && liveNative(source)) {
     return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId, recoverLedger: true,
-      result: item(thread, "already-current", oldRecords) };
+      result: alreadyCurrentItem(thread, oldRecords, newThreadId, oldRecord.projectId) };
   }
 
   const planned = planV2Thread(selection, thread, paths, oldRecord.projectId, false, providerInstance, {
@@ -378,7 +510,7 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
           ...(candidate.events ?? []).map((event) => ({ eventId: event.id, threadId: newThreadId, sequence: event.sequence })),
           ...oldThreads.flatMap((value) => (value.events ?? []).map((event) => ({ eventId: event.id, threadId: value.threadId, sequence: event.sequence }))),
         ],
-        result: item(thread, "already-current", oldRecords) };
+        result: alreadyCurrentItem(thread, oldRecords, newThreadId, oldRecord.projectId) };
     }
     return { conversation, thread, oldRecord, oldRecords, planned, oldThreads, replacementId: newThreadId,
       result: item(thread, "history-conflict", oldRecords, "The deterministic replacement ID already contains different history. Preserve it and resolve the conflict before retrying.") };
@@ -499,15 +631,53 @@ export async function replaceNightlyV2(
   if (writable.reduce((total, plan) => total + plan.result.events, 0) > 5000) {
     throw safetyError("Replacement exceeds the safe one-launch native event limit. Replace fewer conversations at a time.");
   }
-  const backup = writable.length > 0 ? createBackup(db, paths) : null;
+  let backup: string | null = null;
+  const backupByPlan = new Map<ReplacementPlan, string>();
+  const receiptsByPlan = new Map<ReplacementPlan, ReplacementReceipt>();
   const warnings: string[] = [];
   for (const plan of ledgerRecoveries) {
+    try {
+      const receipt = await readReplacementReceipt(paths, plan);
+      if (receipt) {
+        receiptsByPlan.set(plan, receipt);
+        backupByPlan.set(plan, receipt.backupPath);
+        backup ??= receipt.backupPath;
+      }
+    } catch (error) {
+      warnings.push(`The committed replacement was verified, but its backup receipt could not be validated; ledger recovery was skipped (${error instanceof Error ? error.message : String(error)}).`);
+    }
+  }
+  const pendingReceipts = new Set<ReplacementPlan>();
+  for (const plan of writable) {
+    const receipt = await readReplacementReceipt(paths, plan);
+    if (receipt) {
+      receiptsByPlan.set(plan, receipt);
+      backupByPlan.set(plan, receipt.backupPath);
+      backup ??= receipt.backupPath;
+    } else pendingReceipts.add(plan);
+  }
+  if (pendingReceipts.size > 0) {
+    const createdBackup = createBackup(db, paths);
+    backup ??= createdBackup;
+    for (const plan of pendingReceipts) {
+      const receipt = await writeReplacementReceipt(paths, plan, createdBackup);
+      receiptsByPlan.set(plan, receipt);
+      backupByPlan.set(plan, receipt.backupPath);
+    }
+  }
+  for (const plan of ledgerRecoveries) {
+    const receipt = receiptsByPlan.get(plan);
+    if (!receipt) {
+      warnings.push("The committed replacement is intact, but no durable pre-mutation backup receipt exists. Its ledger mapping was left unchanged rather than pointing to the original import backup.");
+      continue;
+    }
     const sequences = plan.recoverySequences ?? plan.oldThreads?.flatMap((value) => (value.events ?? []).map((event) => ({
       eventId: event.id, threadId: value.threadId, sequence: event.sequence,
     }))) ?? [];
     try {
-      const record = recordFor(plan, paths, plan.oldRecord!.backupPath ?? backup!, sequences);
+      const record = recordFor(plan, paths, receipt.backupPath, sequences);
       recordConsolidation(plan.oldRecords, record);
+      removeReplacementReceipt(paths, plan);
     } catch (error) {
       warnings.push(`The committed replacement is verified, but its ledger ownership could not be recovered: ${error instanceof Error ? error.message : String(error)}.`);
     }
@@ -595,9 +765,12 @@ export async function replaceNightlyV2(
       throw writeError(`Native replacement did not commit cleanly. The verified backup is ${backup}. ${response.error ?? response.outcome ?? "unknown result"}`);
     }
     const storedSequences = response.storedSequences ?? [];
-    const record = recordFor(plan, paths, backup!, storedSequences);
+    const planBackup = backupByPlan.get(plan);
+    if (!planBackup) throw writeError("The replacement recovery receipt is missing after the native commit.");
+    const record = recordFor(plan, paths, planBackup, storedSequences);
     try {
       recordConsolidation(plan.oldRecords, record);
+      removeReplacementReceipt(paths, plan);
     } catch (error) {
       warnings.push(`Replacement succeeded, but its ledger ownership could not be updated: ${error instanceof Error ? error.message : String(error)}. Retry replacement to recover the committed native batch.`);
     }

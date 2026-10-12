@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import Database from "better-sqlite3";
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -152,19 +152,60 @@ describe.skipIf(!t3SourceDir || !existsSync(t3SourceDir))("public sync and repla
   });
 
   it("replaces a converted task addressed only by its old-target ledger row", async () => {
-    const { fixture, paths, thread } = await upgradedCodexFixture("t3-v2-upgrade-replace-");
+    const { root, fixture, paths, thread, oldRecord } = await upgradedCodexFixture("t3-v2-upgrade-replace-");
     appendFollowup(thread);
     const conversation = canonicalConversation(thread.workspace, thread);
+    const ledgerPath = join(root, "ledger", "ledger.sqlite");
+    const ledger = new Database(ledgerPath);
+    ledger.exec("CREATE TRIGGER reject_upgrade_replacement_ledger BEFORE INSERT ON imports BEGIN SELECT RAISE(ABORT, 'injected replacement ledger interruption'); END;");
+    ledger.close();
+    const before = eventCount(fixture.dbPath);
 
     const result = await replaceConversations([{ conversation }], paths, { dryRun: false });
 
     expect(result.results[0]).toMatchObject({ status: "replaced", oldThreadId: fixture.threadId });
+    expect(result.warnings.join(" ")).toContain("ledger ownership could not be updated");
     expect(result.results[0]!.newThreadId).toBeTruthy();
     expect(result.results[0]!.newThreadId).not.toBe(fixture.threadId);
+    const newThreadId = result.results[0]!.newThreadId!;
+    const committedEvents = eventCount(fixture.dbPath);
+    expect(committedEvents).toBeGreaterThan(before);
+    const backupDirectory = join(paths.stateDir, "t3-import-backups");
+    expect(readdirSync(backupDirectory).filter((name) => name.startsWith("replacement-") && name.endsWith(".json"))).toHaveLength(1);
+    const interruptedLedger = new Database(ledgerPath, { readonly: true });
+    try {
+      expect(interruptedLedger.prepare("SELECT target_id targetId, backup_path backupPath, is_canonical canonical FROM imports WHERE thread_id = ?").get(fixture.threadId))
+        .toEqual({ targetId: oldRecord.targetId, backupPath: oldRecord.backupPath, canonical: 1 });
+      expect(interruptedLedger.prepare("SELECT COUNT(*) count FROM imports WHERE thread_id = ?").get(newThreadId))
+        .toMatchObject({ count: 0 });
+    } finally { interruptedLedger.close(); }
     const db = new Database(fixture.dbPath, { readonly: true });
     try {
       expect(db.prepare("SELECT deleted_at deletedAt FROM orchestration_v2_projection_threads WHERE thread_id = ?").get(fixture.threadId))
         .toMatchObject({ deletedAt: expect.any(String) });
     } finally { db.close(); }
+
+    const writableLedger = new Database(ledgerPath);
+    writableLedger.exec("DROP TRIGGER reject_upgrade_replacement_ledger;");
+    writableLedger.close();
+    const retry = await replaceConversations([{ conversation }], paths, { dryRun: false });
+    expect(retry.results[0]).toMatchObject({ status: "already-current", oldThreadId: fixture.threadId, newThreadId });
+    expect(eventCount(fixture.dbPath)).toBe(committedEvents);
+    const recoveredLedger = new Database(ledgerPath, { readonly: true });
+    try {
+      const rows = recoveredLedger.prepare("SELECT target_id targetId, thread_id threadId, backup_path backupPath, is_canonical canonical, superseded_by_thread_id supersededBy FROM imports ORDER BY imported_at").all();
+      expect(rows).toEqual([
+        { targetId: oldRecord.targetId, threadId: fixture.threadId, backupPath: oldRecord.backupPath, canonical: 0, supersededBy: newThreadId },
+        { targetId: sha256(canonicalPath(fixture.dbPath)), threadId: newThreadId, backupPath: result.backup, canonical: 1, supersededBy: null },
+      ]);
+    } finally { recoveredLedger.close(); }
+    const backup = new Database(result.backup!, { readonly: true, fileMustExist: true });
+    try {
+      expect(backup.prepare("SELECT deleted_at deletedAt FROM orchestration_v2_projection_threads WHERE thread_id = ?").get(fixture.threadId))
+        .toEqual({ deletedAt: null });
+      expect(backup.prepare("SELECT COUNT(*) count FROM orchestration_v2_projection_threads WHERE thread_id = ?").get(newThreadId))
+        .toMatchObject({ count: 0 });
+    } finally { backup.close(); }
+    expect(readdirSync(backupDirectory).filter((name) => name.startsWith("replacement-") && name.endsWith(".json"))).toEqual([]);
   });
 });
