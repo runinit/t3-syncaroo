@@ -72,6 +72,15 @@ describe("interactive TUI", () => {
     tui.unmount();
   });
 
+  it("shows native import conflicts as attention items with the safe recovery action", () => {
+    const tui = render(<OperationItemWarnings title="Existing task" status="conflict" warnings={["T3 already has a different task for this source session."]} />);
+    const frame = tui.lastFrame() ?? "";
+    expect(frame).toContain("Existing task");
+    expect(frame).toContain("different task for this source session");
+    expect(frame).toContain("Keep the existing T3 task");
+    tui.unmount();
+  });
+
   it("only returns to option screens that were actually visited", () => {
     expect(escapeDestination("threads", ["source"])).toBe("source");
     expect(escapeDestination("threads", ["source", "workspace"])).toBe("workspace");
