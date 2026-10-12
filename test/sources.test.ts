@@ -196,6 +196,49 @@ describe("source adapters", () => {
     await adapter.dispose();
   });
 
+  it("ignores the pre-task manual context handoff without losing the resumed or active source turns", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-codex-manual-context-"));
+    const workspace = join(root, "workspace");
+    const sessions = join(root, "sessions", "2026", "10", "11");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(sessions, { recursive: true });
+    process.env.CODEX_HOME = root;
+    process.env.CODEX_BIN = join(root, "missing-codex-executable");
+    const sessionId = "55555555-6666-4777-8888-999999999999";
+    const row = (second: number, type: string, payload: Record<string, unknown>) => ({
+      timestamp: `2026-10-11T20:59:${String(second).padStart(2, "0")}Z`, type, payload,
+    });
+    jsonl(join(sessions, `rollout-${sessionId}.jsonl`), [
+      row(0, "session_meta", { id: sessionId, cwd: workspace }),
+      row(1, "event_msg", { type: "task_started", turn_id: "prior" }),
+      row(1, "response_item", { type: "message", role: "user", id: "prior-user", content: [{ type: "input_text", text: "Ordinary prior prompt" }] }),
+      row(2, "response_item", { type: "message", role: "assistant", id: "prior-assistant", content: [{ type: "output_text", text: "Prior answer" }] }),
+      row(3, "event_msg", { type: "task_complete", turn_id: "prior" }),
+      row(4, "response_item", { type: "message", role: "user", id: "generated-handoff", content: [{ type: "input_text", text: "Context handoff (manual_context):\nProvider context handoff. Thread: task-123.\nRecover omitted history using t3_thread_read(...)." }] }),
+      row(5, "response_item", { type: "message", role: "user", id: "compacted-history-user", content: [{ type: "input_text", text: "Compacted historical user message" }] }),
+      row(6, "response_item", { type: "message", role: "assistant", id: "compacted-history-assistant", content: [{ type: "output_text", text: "Compacted historical assistant message" }] }),
+      row(7, "event_msg", { type: "task_started", turn_id: "resumed" }),
+      row(8, "response_item", { type: "message", role: "user", id: "resumed-user", content: [{ type: "input_text", text: "Reply exactly CONTINUED_CODEX_OK." }] }),
+      row(9, "response_item", { type: "message", role: "assistant", id: "resumed-assistant", content: [{ type: "output_text", text: "CONTINUED_CODEX_OK" }] }),
+      row(10, "event_msg", { type: "task_complete", turn_id: "resumed" }),
+      row(11, "event_msg", { type: "task_started", turn_id: "still-active" }),
+      row(11, "response_item", { type: "message", role: "user", id: "active-user", content: [{ type: "input_text", text: "Leave this genuinely unfinished" }] }),
+    ]);
+
+    const adapter = new CodexSource();
+    const summary = (await adapter.discover({ workspace }))[0]!;
+    const conversation = await adapter.load(summary, {});
+    const thread = conversation.threads[0]!;
+    expect(thread.turns.map((turn) => [turn.id, turn.status, turn.user.text])).toEqual([
+      ["prior", "completed", "Ordinary prior prompt"],
+      ["resumed", "completed", "Reply exactly CONTINUED_CODEX_OK."],
+    ]);
+    expect(thread.ignoredInProgressTurns).toBe(1);
+    const withActive = await adapter.load(summary, { includeIncomplete: true });
+    expect(withActive.threads[0]!.turns.at(-1)).toMatchObject({ id: "still-active", status: "inProgress", user: { text: "Leave this genuinely unfinished" } });
+    await adapter.dispose();
+  });
+
   it("classifies Claude truncation, refusal, context failure, API retry, and active continuation", async () => {
     const root = await mkdtemp(join(tmpdir(), "t3-import-claude-status-"));
     const workspace = join(root, "workspace");

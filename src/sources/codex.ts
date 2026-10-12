@@ -32,6 +32,7 @@ import { discoveryOutcome, sourceFileErrorCode, walkFilesWithFailures } from "./
 import { CodexAppServerSession, type CodexThreadMetadata } from "./codexAppServer.js";
 
 const SYNTHETIC_PREFIXES = ["<recommended_plugins>", "<environment_context>", "<app-context>", "<permissions instructions>"];
+const CODEX_MANUAL_CONTEXT_PREFIX = "Context handoff (manual_context):";
 
 interface PendingTurn {
   id: string;
@@ -236,6 +237,7 @@ function parseRows(
   let effort: string | undefined;
   let gitBranch: string | undefined;
   let active: PendingTurn | undefined;
+  let manualContextPrelude = false;
   const turns: PendingTurn[] = [];
   let recordIndex = 0;
   let lastUsageSignature: string | undefined;
@@ -278,8 +280,9 @@ function parseRows(
       const eventType = stringValue(payload.type) ?? "";
       const turnId = stringValue(payload.turn_id);
       if (eventType === "task_started") {
-        if (active?.users.length) turns.push(active);
+        if (active?.users.length && !manualContextPrelude) turns.push(active);
         active = newPending(turnId ?? `turn-${recordIndex}`, isoTimestamp(payload.started_at, timestamp));
+        manualContextPrelude = false;
       } else if (eventType === "task_complete") {
         const turn = findTurn(turnId);
         if (turn) {
@@ -347,6 +350,11 @@ function parseRows(
       if (role !== "user" && role !== "assistant") continue;
       const parsed = textParts(payload.content, role);
       if (!parsed.text && parsed.attachments.length === 0) continue;
+      if (role === "user" && parsed.text.startsWith(CODEX_MANUAL_CONTEXT_PREFIX)) {
+        manualContextPrelude = true;
+        continue;
+      }
+      if (manualContextPrelude) continue;
       if (role === "user" && SYNTHETIC_PREFIXES.some((prefix) => parsed.text.startsWith(prefix))) continue;
       const turn = ensureTurn(timestamp, stringValue(payload.turn_id));
       const message: CanonicalMessage = {
@@ -385,7 +393,7 @@ function parseRows(
       }
     }
   }
-  if (active?.users.length) turns.push(active);
+  if (active?.users.length && !manualContextPrelude) turns.push(active);
   if (!sessionId) throw sourceError(`Codex rollout has no session id: ${filePath}`);
   workspace = workspace ?? (appThread ? stringValue(appThread.cwd) : undefined);
   if (!workspace) throw sourceError(`Codex rollout has no workspace: ${filePath}`);
