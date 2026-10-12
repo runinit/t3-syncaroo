@@ -1,0 +1,19 @@
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -17,11 +17,13 @@
+ 
+ ## Subagents
+ 
+-All work should be done in subagents. Protect your context window.
++Do the work through subagents and use background agents to keep the user dialogue active. Prefer fresh-context agents (`fork_turns: none`) when the harness supports them. Keep assignments bounded and give each a short brief with the goal, context pointers, owned files, dependencies, checks, and completion evidence. Give agents disjoint write ownership and state a readiness contract for prerequisites before dependent work begins. Keep one integration owner responsible for resolving seams and integrating results.
+ 
+-Use background agents so you can stay in active dialogue with the user.
++Request milestone updates at handoff, dependency readiness, or a blocker; use those updates to coordinate instead of polling. Keep communication sparse and point to notes or artifacts rather than repeating their contents.
+ 
+-Communication to and from subagents should be sparse. Communicate primarily through **context pointers**: research notes, previous commits, and others. Don't duplicate information already available via pointers.
++Before integration or review, require a stable handoff: the owned change or fixed diff/snapshot, a concise behavior summary, focused green check commands with results, and unresolved risks. Targeted green evidence establishes readiness for full acceptance checks. Do not require commits when the harness does not need them.
++
++Review a recorded diff, commit, or snapshot. If the work changes after review, send the reviewer only the files changed since that recorded scope and identify the new snapshot. The review is complete when that scope has a verdict and every subsequent changed file has been reviewed.
+ 
+ ## Strategic View
+ 
