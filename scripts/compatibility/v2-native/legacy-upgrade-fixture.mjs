@@ -1,7 +1,8 @@
-import { mkdir, readlink, symlink, unlink, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { mkdir, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import * as NodeSqlite from "node:sqlite";
+import { ensureFixtureLink } from "./safe-link.mjs";
 
 const [homeArg] = process.argv.slice(2);
 const home = resolve(homeArg ?? "");
@@ -10,21 +11,12 @@ const dependencyRoot = process.env.T3_V2_T3_DEPENDENCY_ROOT ?? t3Root;
 const workspaceRoot = process.env.T3_V2_UPGRADE_WORKSPACE ?? "/tmp/t3-upgrade-fixture";
 const providerInstance = process.env.T3_V2_UPGRADE_PROVIDER_INSTANCE ?? "codex";
 if (!homeArg || !t3Root || !dependencyRoot) throw new Error("usage: T3_V2_T3_SOURCE_DIR=<pinned-t3-source> [T3_V2_T3_DEPENDENCY_ROOT=<installed-pinned-dependencies>] node legacy-upgrade-fixture.mjs <synthetic-home>");
-const ensureLink = async (target, link) => {
-  if (resolve(target) === resolve(link)) return;
-  await mkdir(dirname(link), { recursive: true });
-  try {
-    if (resolve(dirname(link), await readlink(link)) === resolve(target)) return;
-    await unlink(link);
-  } catch (error) { if (error.code !== "ENOENT") throw error; }
-  await symlink(target, link, "dir");
-};
-await ensureLink(join(dependencyRoot, "packages/contracts/node_modules/effect"), join(t3Root, "node_modules/effect"));
-await ensureLink(join(dependencyRoot, "packages/contracts"), join(t3Root, "node_modules/@t3tools/contracts"));
-await ensureLink(join(dependencyRoot, "packages/shared"), join(t3Root, "node_modules/@t3tools/shared"));
-await ensureLink(join(dependencyRoot, "packages/provider-core"), join(t3Root, "node_modules/@t3tools/provider-core"));
-await ensureLink(join(dependencyRoot, "packages/contracts/node_modules/effect"), join(t3Root, "packages/contracts/node_modules/effect"));
-await ensureLink(join(dependencyRoot, "packages/contracts/node_modules/effect"), join(t3Root, "packages/shared/node_modules/effect"));
+await ensureFixtureLink(join(dependencyRoot, "packages/contracts/node_modules/effect"), join(t3Root, "node_modules/effect"));
+await ensureFixtureLink(join(dependencyRoot, "packages/contracts"), join(t3Root, "node_modules/@t3tools/contracts"));
+await ensureFixtureLink(join(dependencyRoot, "packages/shared"), join(t3Root, "node_modules/@t3tools/shared"));
+await ensureFixtureLink(join(dependencyRoot, "packages/provider-core"), join(t3Root, "node_modules/@t3tools/provider-core"));
+await ensureFixtureLink(join(dependencyRoot, "packages/contracts/node_modules/effect"), join(t3Root, "packages/contracts/node_modules/effect"));
+await ensureFixtureLink(join(dependencyRoot, "packages/contracts/node_modules/effect"), join(t3Root, "packages/shared/node_modules/effect"));
 const t3ToolAliases = join(t3Root, "node_modules/@t3tools");
 await mkdir(t3ToolAliases, { recursive: true });
 const source = (path) => import(pathToFileURL(join(t3Root, path)).href);
