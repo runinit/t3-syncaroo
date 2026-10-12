@@ -57,6 +57,7 @@ export function resultHeading(hasIssues: boolean): string {
 }
 
 export function operationNextAction(status: string): string {
+  if (status === "conflict") return "Keep the existing T3 task and resolve the source-history mismatch before retrying.";
   if (status === "history-diverged") return "Use replace to apply the changed provider history to this T3 task.";
   if (status === "active-source") return "Wait for the provider session to finish, then retry the operation.";
   if (status === "target-missing" || status === "not-imported") return "Import this conversation before synchronizing or replacing it.";
