@@ -38,7 +38,59 @@ async function setup(prefix: string, configureThread?: (thread: ReturnType<typeo
   return { root, workspace, paths, conversation, oldThreadId: imported.results[0]!.threadId! };
 }
 
+function appendNativeShellEvent(dbPath: string, threadId: string, type: "thread.visited" | "thread.metadata-updated") {
+  const db = new Database(dbPath);
+  try {
+    const created = db.prepare("SELECT * FROM orchestration_events WHERE stream_id = ? AND event_type = 'thread.created'").get(threadId) as Record<string, any>;
+    const sequence = Number((db.prepare("SELECT MAX(sequence) value FROM orchestration_events").get() as { value: number }).value) + 1;
+    const version = Number((db.prepare("SELECT MAX(stream_version) value FROM orchestration_events WHERE stream_id = ?").get(threadId) as { value: number }).value) + 1;
+    db.prepare(`INSERT INTO orchestration_events (
+      sequence, event_id, aggregate_kind, stream_id, stream_version, event_type, occurred_at,
+      command_id, causation_event_id, correlation_id, actor_kind, payload_json, metadata_json, application_event_version
+    ) VALUES (?, ?, 'thread', ?, ?, ?, ?, NULL, NULL, NULL, 'server', ?, ?, 2)`).run(
+      sequence, `native-shell-event-${sequence}`, threadId, version, type, created.occurred_at,
+      JSON.stringify({ ...JSON.parse(created.payload_json), lastVisitedAt: created.occurred_at }), created.metadata_json,
+    );
+    db.prepare("UPDATE orchestration_v2_projection_metadata SET last_sequence = ? WHERE last_sequence < ?").run(sequence, sequence);
+  } finally { db.close(); }
+}
+
 describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 replacement", () => {
+  it("replaces a viewed task without treating visit events as foreign history", async () => {
+    const { paths, conversation, oldThreadId } = await setup("t3-v2-replace-visited-");
+    appendNativeShellEvent(paths.dbPath, oldThreadId, "thread.visited");
+    appendNativeShellEvent(paths.dbPath, oldThreadId, "thread.visited");
+    conversation.threads[0]!.turns[0]!.assistant[0]!.text = "Updated after viewing";
+
+    expect(await inspectConversationReplacement(conversation, paths)).toMatchObject({ status: "replaceable", oldThreadId });
+    const result = await replaceConversations([{ conversation }], paths, { dryRun: false });
+    expect(result.results[0]).toMatchObject({ status: "replaced", oldThreadId });
+    const newThreadId = result.results[0]!.newThreadId!;
+    const native = JSON.parse(execFileSync(process.execPath, [nativeHelper], {
+      input: JSON.stringify({ op: "inspect", dbPath: paths.dbPath, threadIds: [oldThreadId, newThreadId] }), encoding: "utf8",
+    })) as { threads: Array<any> };
+    expect(native.threads.find((entry) => entry.threadId === oldThreadId)?.exists).toBe(false);
+    expect(native.threads.find((entry) => entry.threadId === newThreadId)?.records.messages)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ text: "Updated after viewing" })]));
+    const beforeSync = eventCount(paths.dbPath);
+    expect((await syncConversations([{ conversation }], paths, { dryRun: false })).results[0])
+      .toMatchObject({ status: "up-to-date", threadId: newThreadId, events: 0 });
+    expect(eventCount(paths.dbPath)).toBe(beforeSync);
+  });
+
+  it("still rejects foreign history events alongside task visits", async () => {
+    const { paths, conversation, oldThreadId } = await setup("t3-v2-replace-visited-foreign-");
+    appendNativeShellEvent(paths.dbPath, oldThreadId, "thread.visited");
+    appendNativeShellEvent(paths.dbPath, oldThreadId, "thread.metadata-updated");
+    conversation.threads[0]!.turns[0]!.assistant[0]!.text = "Changed source";
+    const before = eventCount(paths.dbPath);
+    const result = await replaceConversations([{ conversation }], paths, { dryRun: false });
+    expect(result.results[0]).toMatchObject({ status: "history-conflict", oldThreadId });
+    expect(result.results[0]!.warnings.join(" ")).toContain("not the deterministic t3-import history");
+    expect(result.backup).toBeNull();
+    expect(eventCount(paths.dbPath)).toBe(before);
+  });
+
   it("replaces one owned task atomically and recovers its ledger mapping without replay", async () => {
     const { root, paths, conversation, oldThreadId } = await setup("t3-v2-replace-recovery-");
     conversation.threads[0]!.turns[0]!.assistant[0]!.text = "Updated source answer";

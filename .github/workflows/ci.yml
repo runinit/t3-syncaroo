@@ -25,3 +25,19 @@ jobs:
       - name: Install packed artifact
         shell: bash
         run: npm install --global ./carlosgtrz-t3-import-*.tgz && t3-import --help
+
+  pinned-v2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.10.0
+      - run: npm ci
+      - name: Run required pinned T3 v2 suites and packed consumer proof
+        run: npm run test:v2-pinned

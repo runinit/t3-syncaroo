@@ -55,8 +55,17 @@ export function deriveVerifiedCheckpointItemIds(input: NativeCheckpointProvenanc
       || run.providerThreadId !== input.providerThreadId || run.rootNodeId !== item.nodeId
       || run.checkpointId !== checkpoint.id || run.ordinal !== checkpoint.appRunOrdinal
       || typeof run.activeAttemptId !== "string" || !run.activeAttemptId) return [];
-    if (scope.runId !== run.id || scope.nodeId !== run.rootNodeId || scope.providerThreadId !== input.providerThreadId
-      || scope.kind !== "root_run" || scope.advancesAppRunCount !== true) return [];
+    // The root scope is reused and points at the latest run. Older checkpoints
+    // retain their own immutable run/node links, so verify both owners rather
+    // than requiring the scope's current run to be the checkpoint's run.
+    const scopeRun = exactlyOne(input.runs, (row) => row.id === scope.runId && row.threadId === input.threadId);
+    const scopeNode = exactlyOne(input.nodes, (row) => row.id === scope.nodeId && row.threadId === input.threadId);
+    if (!scopeRun || scopeRun.status !== "completed" || scopeRun.providerThreadId !== input.providerThreadId
+      || scopeRun.providerInstanceId !== input.providerInstanceId || !Number.isInteger(scopeRun.ordinal) || scopeRun.ordinal < run.ordinal
+      || scopeRun.rootNodeId !== scope.nodeId || !scopeNode || scopeNode.runId !== scopeRun.id
+      || scopeNode.kind !== "root_turn" || scopeNode.status !== "completed" || scopeNode.checkpointScopeId !== scope.id
+      || scopeNode.providerThreadId !== input.providerThreadId
+      || scope.providerThreadId !== input.providerThreadId || scope.kind !== "root_run" || scope.advancesAppRunCount !== true) return [];
 
     const attempt = exactlyOne(input.runAttempts, (row) => row.id === run.activeAttemptId && row.runId === run.id && row.threadId === input.threadId);
     if (!attempt || attempt.status !== "completed" || attempt.rootNodeId !== run.rootNodeId

@@ -12,7 +12,7 @@ import type {
   TargetPaths,
 } from "../../core/types.js";
 import { isTerminalTurn } from "../../core/types.js";
-import { checkpointForThread } from "../../core/checkpoint.js";
+import { checkpointForThread, type NativeProjectionIdentityV1 } from "../../core/checkpoint.js";
 import { canonicalPath, deterministicUuid, sha256 } from "../../core/util.js";
 import { safetyError, writeError } from "../../core/errors.js";
 import { listImportsForTargets, recordConsolidation, type LedgerRecord, type StoredLedgerRecord } from "../ledger.js";
@@ -25,7 +25,8 @@ import {
   IMPORTER_VERSION,
   type V2Plan,
 } from "../importer.js";
-import { projectedHistoryMatches } from "./history.js";
+import { nativeProjectionIdentityMatches, projectedHistoryMatches } from "./history.js";
+import { reconcileNativeHistory, nativeExpectedTurnEvents } from "./native-history.js";
 import { verifyOrRecoverV2Assets } from "./assets.js";
 import { verifyUpgradedPrefix } from "./upgraded-binding.js";
 
@@ -279,15 +280,33 @@ function hasOwnedCreation(value: NativeThread | undefined, record: StoredLedgerR
   return importedEventIds(record, record.threadId).every((id) => events.some((event) => event.id === id));
 }
 
-function strictEventOwnership(value: NativeThread | undefined, expectedEvents: Array<Record<string, unknown>>): boolean {
-  const actual = value?.events;
-  if (!Array.isArray(actual) || actual.length > expectedEvents.length) return false;
-  return actual.length > 0 && actual.every((event, index) => event.id === String(expectedEvents[index]?.id)
-    && Number.isSafeInteger(event.sequence) && event.sequence > 0
-    && (index === 0 || event.sequence > actual[index - 1]!.sequence));
+async function strictEventOwnership(paths: TargetPaths, value: NativeThread | undefined, expectedEvents: Array<Record<string, unknown>>): Promise<boolean> {
+  if (!value) return false;
+  const actual = value.events;
+  if (!Array.isArray(actual) || actual.length === 0 || !actual.every((event, index) =>
+    Number.isSafeInteger(event.sequence) && event.sequence > 0
+    && (index === 0 || event.sequence > actual[index - 1]!.sequence))) return false;
+  const expectedIds = new Set(expectedEvents.map((event) => String(event.id)));
+  const extra = actual.filter((event) => !expectedIds.has(event.id));
+  if (extra.length > 0) {
+    // Opening a task adds a native visit without taking ownership of its history.
+    // Decode extra events through the pinned helper; arbitrary native edits must
+    // still fail the ownership check.
+    const inspected = await callV2Native(paths, {
+      op: "inspect", threadIds: [value.threadId], selectedEventIds: extra.map((event) => event.id),
+    });
+    const details = inspected.threads?.find((thread) => thread.threadId === value.threadId)?.selectedEventDetails;
+    if (!inspected.ok || !details || details.length !== extra.length || !extra.every((event) =>
+      details.some((detail) => detail.id === event.id && detail.sequence === event.sequence
+        && detail.event.id === event.id && detail.event.threadId === value.threadId
+        && detail.event.type === "thread.visited"))) return false;
+  }
+  const owned = actual.filter((event) => expectedIds.has(event.id));
+  return owned.length > 0 && owned.length <= expectedEvents.length
+    && owned.every((event, index) => event.id === String(expectedEvents[index]?.id));
 }
 
-type NativeProjectionMarker = { kind: "semantic-native-prefix-v1"; messages: string[]; turnItems: string[]; plans: string[] };
+type NativeProjectionMarker = NativeProjectionIdentityV1;
 
 function nativeProjectionMarker(record: StoredLedgerRecord): NativeProjectionMarker | undefined {
   const marker = (record.checkpoint as unknown as { nativeProjection?: NativeProjectionMarker } | undefined)?.nativeProjection;
@@ -297,7 +316,7 @@ function nativeProjectionMarker(record: StoredLedgerRecord): NativeProjectionMar
     && Array.isArray(marker.plans) && marker.plans.every((id) => typeof id === "string") ? marker : undefined;
 }
 
-function verifiedNativePrefix(value: NativeThread | undefined, record: StoredLedgerRecord, expectedEvents: Array<Record<string, unknown>>): boolean {
+function verifiedNativePrefix(value: NativeThread | undefined, record: StoredLedgerRecord, expectedEvents: Array<Record<string, unknown>>, native = false): boolean {
   const marker = nativeProjectionMarker(record);
   const records = projectedRecords(value);
   if (!marker || !records?.messages || !records.turnItems || !records.plans) return false;
@@ -312,7 +331,8 @@ function verifiedNativePrefix(value: NativeThread | undefined, record: StoredLed
   if (groups.some(([actual, ids, expected]) => ids.length > expected.length || actual.length !== expected.length
     || actual.slice(0, ids.length).some((row, index) => row.id !== ids[index])
     || !expected.slice(ids.length).every((row, offset) => actual[ids.length + offset]?.id === row.id))) return false;
-  if (!projectedHistoryMatches(records, expectedEvents, { identity: "semantic" })) return false;
+  if (!nativeProjectionIdentityMatches(records, marker)
+    || !projectedHistoryMatches(records, expectedEvents, { identity: native ? "native-semantic" : "semantic" })) return false;
   return expectedItems.every((expected, index) => {
     if (typeof expected.messageId !== "string") return true;
     const messageIndex = expectedMessages.findIndex((message) => message.id === expected.messageId);
@@ -334,7 +354,7 @@ function liveNative(value: NativeThread | undefined): boolean {
 }
 
 async function inspect(paths: TargetPaths, threadIds: string[], projectIds: string[] = []) {
-  return callV2Native(paths, { op: "inspect", threadIds, projectIds });
+  return callV2Native(paths, { op: "inspect", threadIds, projectIds, includeRecoveryRecords: true });
 }
 
 async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths): Promise<ReplacementPlan> {
@@ -476,19 +496,29 @@ async function buildPlan(conversation: CanonicalConversation, paths: TargetPaths
     threadId: oldRecord.threadId, identitySeed: oldRecord.identitySeed || oldRecord.sourceKey,
     disableResume: !canContinue,
   });
-  if (!marker && !upgradedPrefix && liveNative(source) && !strictEventOwnership(source, currentPlan.events)) {
+  if (!marker && !upgradedPrefix && liveNative(source) && !await strictEventOwnership(paths, source, currentPlan.events)) {
     return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId,
       result: item(thread, "history-conflict", oldRecords, "The native event stream is not the deterministic t3-import history owned by this ledger record.") };
   }
-  const priorView = { exists: true, thread: projectedThread(source), records: projectedRecords(source) };
-  const historyVerified = upgradedPrefix ? true : marker ? verifiedNativePrefix(source, oldRecord, currentPlan.events)
+  const identityThread = { ...thread, sourceKey: oldRecord.identitySeed || oldRecord.sourceKey };
+  const normalizedTurns = identityThread.turns.map((turn) => nativeExpectedTurnEvents(
+    planV2Thread(selection, { ...identityThread, turns: [turn] }, paths, oldRecord.projectId, false, providerInstance,
+      { threadId: oldRecord.threadId, identitySeed: identityThread.sourceKey, disableResume: !canContinue }),
+    turn, thread.source === "claude" ? "claudeAgent" : "codex").events);
+  const normalizedHistory = binding
+    ? reconcileNativeHistory(source as V2ThreadReply, identityThread, binding, normalizedTurns)
+    : { target: source as V2ThreadReply, supplementalEvents: [], verified: false };
+  const verifiedSource = normalizedHistory.target as NativeThread;
+  const priorView = { exists: true, thread: projectedThread(verifiedSource), records: projectedRecords(verifiedSource) };
+  const historyVerified = upgradedPrefix ? true : marker ? verifiedNativePrefix(verifiedSource, oldRecord, currentPlan.events, normalizedHistory.verified) && normalizedHistory.supplementalEvents.length === 0
     : projectedHistoryMatches(priorView.records, currentPlan.events);
   const unchanged = currentPlan.resumable === canContinue
     && historyVerified
     && (upgradedPrefix || nativeBinding(source)?.providerInstanceId === currentPlan.provider.instanceId)
     && (upgradedPrefix ? true : canContinue
       ? binding!.nativeThreadRef?.nativeId === (thread.source === "claude" ? thread.sourceSessionId : String(thread.resumeCursor?.threadId ?? thread.sourceSessionId))
-        && (thread.source !== "claude" || binding!.nativeConversationHeadRef?.nativeId === thread.resumeCursor?.resumeSessionAt)
+        && (thread.source !== "claude" || binding!.nativeConversationHeadRef?.nativeId === thread.resumeCursor?.resumeSessionAt
+          || (binding!.nativeConversationHeadRef == null && normalizedHistory.verified))
       : binding!.nativeThreadRef === null && binding!.nativeConversationHeadRef === null);
   if (!upgradedPrefix && unchanged && liveNative(source)) {
     return { conversation, thread, oldRecord, oldRecords, oldThreads, replacementId: newThreadId, recoverLedger: true,

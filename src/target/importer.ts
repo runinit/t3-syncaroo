@@ -32,6 +32,7 @@ import { resolveProviderSelection, type TargetOverrides } from "./config.js";
 import { assertT3Closed, validateTargetDatabase } from "./schema.js";
 import { listImports, listImportsForTargets, recordImports, type LedgerRecord, type StoredLedgerRecord } from "./ledger.js";
 import { captureNativeProjectionIdentity, encodeCanonicalHistory, projectedHistoryMatches, type V2HistoryAsset } from "./v2/history.js";
+import { deriveClaudeHistoricalCandidates } from "./v2/claude-historical-candidates.js";
 import { verifyUpgradedPrefix } from "./v2/upgraded-binding.js";
 import { verifyOrRecoverV2Assets } from "./v2/assets.js";
 import { builtinHeadAttachmentEventId, matchBuiltinImport, type BuiltinImportProjection } from "./v2/adoption.js";
@@ -788,9 +789,17 @@ async function importNightlyV2(
     throw safetyError(`The Codex text import would append ${plannedEventCount} events, exceeding the safe one-launch limit of ${MAX_SAFE_IMPORT_EVENTS}. Split the import into smaller batches before retrying.`);
   }
 
+  const historicalCandidates = new Map(plans.map((plan) => [plan, deriveClaudeHistoricalCandidates({
+    currentThread: plan.thread,
+    currentBranchCount: selectionsByPlan.get(plan)!.conversation.threads.filter((thread) => thread.currentBranch).length,
+    sourceKeyForAssistantHead: (head) => `claude:${plan.thread.sourceSessionId}:${head}`,
+    threadIdForSourceKey: (key) => deterministicUuid(`t3-import:thread:${key}`),
+  })]));
+  const historicalPrefixes = new Map<V2Plan, CanonicalThread>();
   const inspection = await callV2Native(paths, {
     op: "inspect",
-    threadIds: [...new Set(plans.flatMap((plan) => [plan.threadId, `import:${plan.provider.instanceId}:${plan.thread.sourceSessionId}`]))],
+    threadIds: [...new Set(plans.flatMap((plan) => [plan.threadId, `import:${plan.provider.instanceId}:${plan.thread.sourceSessionId}`,
+      ...(historicalCandidates.get(plan) ?? []).map((candidate) => candidate.threadId)]))],
     projectIds: [...new Set(plans.map((plan) => plan.projectId))],
     selectedEventIds: [...new Set(plans.flatMap((plan) => {
       const head = plan.thread.source === "claude" ? plan.thread.resumeCursor?.resumeSessionAt : undefined;
@@ -835,6 +844,25 @@ async function importNightlyV2(
     let prior = inspectedById.get(plan.threadId);
     const mapping = upgradeMappings.get(plan);
     const mappedConflict = mappingConflicts.get(plan);
+    if (!prior?.exists && !mapping && !mappedConflict) {
+      const converted = (historicalCandidates.get(plan) ?? []).filter((candidate) =>
+        candidate.threadId !== plan.threadId && inspectedById.get(candidate.threadId)?.exists);
+      if (converted.length > 1) {
+        conflictsByPlan.set(plan, "More than one historical Claude task exists in the selected source lineage. Preserve them and resolve ownership before importing.");
+        continue;
+      }
+      const candidate = converted[0];
+      if (candidate) {
+        const prefixLength = plan.thread.turns.findIndex((turn) => turn.assistant.some((message) =>
+          message.sourceId.startsWith(`${candidate.leafId}:text:`))) + 1;
+        const prefix = { ...plan.thread, sourceKey: candidate.sourceKey, leafId: candidate.leafId,
+          turns: plan.thread.turns.slice(0, prefixLength) };
+        historicalPrefixes.set(plan, prefix);
+        Object.assign(plan, planV2Thread(selectionsByPlan.get(plan)!, plan.thread, paths, plan.projectId, false,
+          plan.provider.instanceId, { threadId: candidate.threadId, identitySeed: candidate.sourceKey }));
+        prior = inspectedById.get(candidate.threadId);
+      }
+    }
     if (!prior?.exists && !mappedConflict) {
       const builtinThreadId = `import:${plan.provider.instanceId}:${plan.thread.sourceSessionId}`;
       const builtinTarget = inspectedById.get(builtinThreadId);
@@ -935,7 +963,8 @@ async function importNightlyV2(
         sourceFingerprint: mapping?.sourceFingerprint ?? plan.fingerprint,
         currentFingerprint: plan.fingerprint,
         identitySeed: plan.identitySeed,
-        ...(mapping?.checkpoint ? { checkpoint: mapping.checkpoint } : {}),
+        ...(mapping?.checkpoint ? { checkpoint: mapping.checkpoint }
+          : historicalPrefixes.has(plan) ? { checkpoint: checkpointForThread(historicalPrefixes.get(plan)!) } : {}),
         ...(mapping?.nativeConversationHeadId ? { nativeConversationHeadId: mapping.nativeConversationHeadId } : {}),
         ...(builtinMatched.has(plan) && plan.thread.source === "claude" && plan.resumable && !builtinHeadEvents.has(plan)
           && typeof plan.thread.resumeCursor?.resumeSessionAt === "string"

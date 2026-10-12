@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { cp, mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -7,6 +7,21 @@ import { assertCompleteLicenseNotices, readPackageLicenseNotices } from './licen
 import { assertExactSourceSet } from './source-lock-gate.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
+const lockMarker = process.env.T3_V2_PINNED_LOCK_HELD ?? '';
+if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(lockMarker)) {
+  if (process.platform !== 'linux') throw new Error('Pinned-v2 preparation is Linux-only because the pinned build tools and shared lock use flock.');
+  const lockRoot = join(root, 'artifacts/v2-native');
+  await mkdir(lockRoot, { recursive: true });
+  const lockPath = join(lockRoot, '.pinned-v2.lock');
+  console.log(`Waiting for pinned-v2 preparation lock: ${lockPath}`);
+  const locked = spawnSync('flock', ['--exclusive', '--timeout', '2700', lockPath, process.execPath, fileURLToPath(import.meta.url)], {
+    cwd: root,
+    env: { ...process.env, T3_V2_PINNED_LOCK_HELD: randomUUID() },
+    stdio: 'inherit',
+  });
+  if (locked.error) throw locked.error;
+  process.exit(locked.status ?? 1);
+}
 const sourceLockPath = join(root, 'scripts/compatibility/v2-native/source-lock.json');
 const buildToolLockPath = join(root, 'scripts/compatibility/v2-native/build-tool-lock.json');
 const sourceLock = JSON.parse(await readFile(sourceLockPath, 'utf8'));
@@ -79,6 +94,10 @@ if (esbuildVersion !== '0.25.12') throw new Error(`Unexpected esbuild version: $
 const aliasArgs = [
   `--alias:effect=${join(t3Root, 'packages/contracts/node_modules/effect/dist')}`,
   `--alias:@t3tools/contracts=${join(t3Root, 'packages/contracts/src/index.ts')}`,
+  // The helper bundles pinned server files that import shared sources. The
+  // filtered install does not install apps/server's broad workspace graph, so
+  // resolve that workspace package directly to its exact pinned source.
+  `--alias:@t3tools/shared=${join(t3Root, 'packages/shared/src')}`,
 ];
 function bundle(entry, outfile, metaPath, aliases = []) {
   run(process.execPath, [esbuildBin, entry, '--bundle', '--platform=node', '--format=esm', '--target=node22', '--packages=bundle',
@@ -86,7 +105,10 @@ function bundle(entry, outfile, metaPath, aliases = []) {
 }
 bundle('scripts/compatibility/v2-native/helper.ts', helper, metafile, aliasArgs);
 bundle('scripts/compatibility/v2-native/fixture.ts', fixture, fixtureMeta,
-  [`--alias:effect=${join(t3Root, 'packages/contracts/node_modules/effect/dist')}`]);
+  [
+    `--alias:effect=${join(t3Root, 'packages/contracts/node_modules/effect/dist')}`,
+    `--alias:@t3tools/shared=${join(t3Root, 'packages/shared/src')}`,
+  ]);
 
 await mkdir(candidate, { recursive: true });
 await cp(helper, join(candidate, 'helper.mjs'));
@@ -169,7 +191,6 @@ if (noticeText.includes('(No license file found') || noticeText.includes('(Packa
   throw new Error('Incomplete generated license notices');
 }
 await writeFile(join(candidate, 'LICENSES.md'), noticeText);
-await writeFile(join(root, 'scripts/compatibility/v2-native/LICENSES.md'), noticeText);
 
 const helperBytes = await readFile(join(candidate, 'helper.mjs'));
 const archiveBytes = await readFile(archive);
@@ -188,7 +209,8 @@ const provenance = {
   })),
 };
 await writeFile(join(candidate, 'PROVENANCE.json'), `${JSON.stringify(provenance, null, 2)}\n`);
-await writeFile(join(root, 'scripts/compatibility/v2-native/vendor-manifest.json'), `${JSON.stringify(provenance, null, 2)}\n`);
+// This is a path-sensitive local candidate. Keep its provenance in ignored
+// artifacts; the checked-in vendor manifest authenticates the reviewed helper.
 
 const externals = meta.outputs[Object.keys(meta.outputs)[0]].imports.filter((item) => item.external).map((item) => item.path);
 if (externals.some((item) => !item.startsWith('node:'))) throw new Error(`Non-builtin runtime external: ${externals.filter((item) => !item.startsWith('node:')).join(', ')}`);

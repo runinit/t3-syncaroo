@@ -69,6 +69,18 @@ describe("native operational checkpoint provenance", () => {
     expect(deriveVerifiedCheckpointItemIds(value)).toEqual([]);
   });
 
+  it("retains older checkpoint proof after the shared root scope advances to a later completed run", () => {
+    const value = input();
+    const laterRun: Record<string, any> = { ...value.runs[0]!, id: "later-run", rootNodeId: "later-root", ordinal: 2 };
+    value.runs.push(laterRun);
+    value.nodes.push({ ...value.nodes[0]!, id: "later-root", runId: "later-run" });
+    value.checkpointScopes[0]!.runId = "later-run";
+    value.checkpointScopes[0]!.nodeId = "later-root";
+    expect(deriveVerifiedCheckpointItemIds(value)).toEqual([value.turnItems[0]!.id]);
+    laterRun.providerThreadId = "foreign-provider-thread";
+    expect(deriveVerifiedCheckpointItemIds(value)).toEqual([]);
+  });
+
   it("returns only checkpoint IDs and leaves source usage notices as separate history", () => {
     const value = input();
     value.turnItems.push({ id: "usage-item", threadId, type: "system_notice", status: "completed", text: "Context window updated" });

@@ -6,7 +6,7 @@
 
 **References:** [Support spec](../../../docs/t3-v2-support-spec.md) · [Research](../../../docs/t3-v2-support-research.md) · [Design](../../../docs/t3-v2-native-design.md) · [Completed writer proof](../../../docs/t3-v2-proof.md) (evidence, not a ticket).
 
-**Status:** done (implementation checks pass; final global review pending)
+**Status:** done
 
 - [x] CLI, TUI, and machine-readable output distinguish imported/synced, already imported, deferred by a limit, conflict, and failure.
 - [x] Each non-success result explains the session and gives a concrete recovery action without exposing secrets.
@@ -14,3 +14,5 @@
 - [x] A failing source session does not prevent unrelated valid sessions from completing; aggregate counts match the per-session results.
 
 **Integration evidence:** `353fb87`, `ee88533`, `d3b16b8`, `8facec1`, `758c7dd`, and follow-up `dcf9917`. Focused checks passed on integration: CLI/TUI 26 tests, sources/schema 63 tests (including the pinned `.2994` retained-v1 cursor case), typecheck, and build. The ticket08 producer also ran the full suite (532 passed, 9 fixture skips); final global review remains pending.
+
+Final integration review and the complete CLI/TUI outcome regression checks passed on 2026-10-12; see the [acceptance report](../../../docs/t3-v2-real-provider-acceptance.md#final-retake-2026-10-12).

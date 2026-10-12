@@ -3,12 +3,19 @@ import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import * as NodeSqlite from "node:sqlite";
 import { ensureFixtureLink } from "./safe-link.mjs";
+import { deterministicUuid } from "../../../src/core/util.ts";
 
 const [homeArg] = process.argv.slice(2);
 const home = resolve(homeArg ?? "");
 const t3Root = process.env.T3_V2_T3_SOURCE_DIR;
 const dependencyRoot = process.env.T3_V2_T3_DEPENDENCY_ROOT ?? t3Root;
 const workspaceRoot = process.env.T3_V2_UPGRADE_WORKSPACE ?? "/tmp/t3-upgrade-fixture";
+const threadId = process.env.T3_V2_UPGRADE_THREAD_ID ?? "11111111-1111-4111-8111-111111111111";
+const imageSourceId = "legacy-image-06";
+const imageBytes = process.env.T3_V2_UPGRADE_IMAGE_BYTES_BASE64
+  ? Buffer.from(process.env.T3_V2_UPGRADE_IMAGE_BYTES_BASE64, "base64") : undefined;
+const imageAttachmentId = imageBytes ? `${threadId}-${deterministicUuid(`t3-import:attachment:${threadId}:${imageSourceId}`)}` : undefined;
+const attachments = imageBytes ? [{ type: "image", id: imageAttachmentId, name: "proof.png", mimeType: "image/png", sizeBytes: imageBytes.length }] : [];
 const providerInstance = process.env.T3_V2_UPGRADE_PROVIDER_INSTANCE ?? "codex";
 if (!homeArg || !t3Root || !dependencyRoot) throw new Error("usage: T3_V2_T3_SOURCE_DIR=<pinned-t3-source> [T3_V2_T3_DEPENDENCY_ROOT=<installed-pinned-dependencies>] node legacy-upgrade-fixture.mjs <synthetic-home>");
 await ensureFixtureLink(join(dependencyRoot, "packages/contracts/node_modules/effect"), join(t3Root, "node_modules/effect"));
@@ -38,6 +45,10 @@ const run = (effect, layer) => Effect.runPromise(Effect.provide(effect, layer));
 const sourcePath = join(home, "state.sqlite");
 const dbPath = join(home, "statev2.sqlite");
 await mkdir(home, { recursive: true });
+if (imageBytes) {
+  await mkdir(join(home, "attachments"), { recursive: true });
+  await writeFile(join(home, "attachments", `${imageAttachmentId}.png`), imageBytes);
+}
 await writeFile(join(home, ".synthetic-t3-home"), "Disposable legacy-to-v2 upgrade fixture.\n");
 const seedLegacy = Effect.gen(function* () {
   const sql = yield* SqlClient.SqlClient;
@@ -45,15 +56,15 @@ const seedLegacy = Effect.gen(function* () {
   yield* sql`INSERT INTO projection_projects (project_id, title, workspace_root, scripts_json, created_at, updated_at)
     VALUES ('project-06', 'Fixture project', ${workspaceRoot}, '[]', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`;
   yield* sql`INSERT INTO projection_threads (thread_id, project_id, title, model_selection_json, runtime_mode, interaction_mode, created_at, updated_at)
-    VALUES ('11111111-1111-4111-8111-111111111111', 'project-06', 'Pre-upgrade imported thread', ${JSON.stringify({ instanceId: providerInstance, model: providerInstance === "claudeAgent" ? "claude-test" : "gpt-5.4" })}, 'full-access', 'default', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:02.000Z')`;
+    VALUES (${threadId}, 'project-06', 'Pre-upgrade imported thread', ${JSON.stringify({ instanceId: providerInstance, model: providerInstance === "claudeAgent" ? "claude-test" : "gpt-5.4" })}, 'full-access', 'default', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:02.000Z')`;
+  yield* sql`INSERT INTO projection_thread_messages (message_id, thread_id, role, text, attachments_json, is_streaming, created_at, updated_at)
+    VALUES ('legacy-message-06-user', ${threadId}, 'user', 'Question', ${JSON.stringify(attachments)}, 0, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`;
   yield* sql`INSERT INTO projection_thread_messages (message_id, thread_id, role, text, is_streaming, created_at, updated_at)
-    VALUES ('legacy-message-06-user', '11111111-1111-4111-8111-111111111111', 'user', 'Question', 0, '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`;
-  yield* sql`INSERT INTO projection_thread_messages (message_id, thread_id, role, text, is_streaming, created_at, updated_at)
-    VALUES ('legacy-message-06-assistant', '11111111-1111-4111-8111-111111111111', 'assistant', 'Answer', 0, '2026-01-01T00:00:01.000Z', '2026-01-01T00:00:01.000Z')`;
+    VALUES ('legacy-message-06-assistant', ${threadId}, 'assistant', 'Answer', 0, '2026-01-01T00:00:01.000Z', '2026-01-01T00:00:01.000Z')`;
   yield* sql`INSERT INTO orchestration_events (
       event_id, aggregate_kind, stream_id, stream_version, event_type, occurred_at,
       actor_kind, payload_json, metadata_json
-    ) VALUES ('legacy-event-06', 'thread', '11111111-1111-4111-8111-111111111111', 1, 'thread.updated',
+    ) VALUES ('legacy-event-06', 'thread', ${threadId}, 1, 'thread.updated',
       '2026-01-01T00:00:02.000Z', 'server', '{}', '{}')`;
 }).pipe(Effect.provide(SqliteClient.layer({ filename: sourcePath })));
 await run(seedLegacy, Layer.empty);
@@ -74,7 +85,7 @@ const importerLayer = Layer.provideMerge(LegacyImporter.layer, Layer.mergeAll(st
 await run(Effect.gen(function* () {
   const importer = yield* LegacyImporter.LegacyV1ThreadImporter;
   yield* importer.reconcileShells;
-  yield* importer.ensureTranscript("11111111-1111-4111-8111-111111111111");
+  yield* importer.ensureTranscript(threadId);
 }), importerLayer);
 
 const maintenanceLayer = Layer.provideMerge(ProjectionMaintenance.layer, storesWithSql);
@@ -108,4 +119,4 @@ try {
   database.close();
 }
 
-console.log(JSON.stringify({ result: "PASS", sourcePath, dbPath, threadId: "11111111-1111-4111-8111-111111111111", providerInstance, compacted: compacted.result }));
+console.log(JSON.stringify({ result: "PASS", sourcePath, dbPath, threadId: threadId, providerInstance, ...(imageBytes ? { imageAttachmentId, imageSourceId } : {}), compacted: compacted.result }));

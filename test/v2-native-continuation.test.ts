@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 import { canonicalConversation, canonicalThread } from "./helpers.js";
 import { resolveTargetPaths } from "../src/target/config.js";
+import { inspectConversationReplacement } from "../src/target/replace.js";
 import { syncConversations } from "../src/target/sync.js";
 import type { CanonicalThread } from "../src/core/types.js";
 import { checkpointForThread } from "../src/core/checkpoint.js";
@@ -34,7 +35,7 @@ function inspectNative(dbPath: string, threadId: string): { events: Array<{ id: 
   return thread;
 }
 
-interface NativeWriteOptions { nativeSessionId?: string; nativeTurnId?: string; userNativeItemId?: string; foreignAssistantNativeTurnIndex?: number; extraActivity?: boolean; extraPlan?: boolean }
+interface NativeWriteOptions { nativeSessionId?: string; nativeTurnId?: string; userNativeItemId?: string; foreignAssistantNativeTurnIndex?: number; extraActivity?: boolean; extraPlan?: boolean; runtimeTimestamps?: boolean }
 
 function nativeBuiltinWrite(root: string, thread: CanonicalThread, instance = "codex", options: NativeWriteOptions = {}): { dbPath: string; projectId: string; target: BuiltinImportProjection & { threadId: string }; events: Array<Record<string, any>> } {
   const dbPath = join(root, "userdata", "statev2.sqlite");
@@ -130,6 +131,23 @@ function nativeBuiltinWrite(root: string, thread: CanonicalThread, instance = "c
       if (plan) events.push({ ...plan, id: "native-unowned-plan-event", providerInstanceId: instance });
     }
   }
+  if (options.runtimeTimestamps) {
+    for (const event of events) {
+      const row = event.payload as Record<string, any>;
+      if (!String(row?.id).startsWith("native-")) continue;
+      if (event.type === "message.updated") {
+        row.creationSource = row.role === "user" ? "web" : "provider";
+        row.createdAt = "2026-01-02T00:00:01.000Z";
+        row.updatedAt = "2026-01-02T00:00:03.000Z";
+      }
+      if (event.type === "turn-item.updated") {
+        row.startedAt = "2026-01-02T00:00:01.000Z";
+        row.completedAt = "2026-01-02T00:00:03.000Z";
+        row.updatedAt = "2026-01-02T00:00:03.000Z";
+        if (row.type === "user_message") row.creationSource = "web";
+      }
+    }
+  }
   events.push({
     id: `agent-session-import:v2:provider-thread:${providerThreadId}`, type: "provider-thread.updated", threadId,
     driver, providerInstanceId: instance, occurredAt: updatedAt,
@@ -170,6 +188,7 @@ interface BuiltinImportProjection {
 describe.skipIf(!fixtureDb)("native provider continuation adoption", () => {
   it.each([
     ["exact native refs", {}, "synced"],
+    ["native runtime timestamps and source usage", { runtimeTimestamps: true }, "synced"],
     ["foreign provider session", { nativeSessionId: "foreign-session" }, "history-diverged"],
     ["foreign provider turn", { nativeTurnId: "foreign-turn" }, "history-diverged"],
     ["foreign explicit user item ref", { userNativeItemId: "foreign-user-item" }, "history-diverged"],
@@ -194,6 +213,10 @@ describe.skipIf(!fixtureDb)("native provider continuation adoption", () => {
       user: { sourceId: "native-user-2", role: "user", text: "Continue", timestamp: "2026-01-02T00:00:00.000Z", attachments: [] },
       assistant: [{ sourceId: "native-assistant-2", role: "assistant", text: "Done", timestamp: "2026-01-02T00:00:02.000Z", attachments: [] }],
       activities: [], plans: [],
+    });
+    if ("runtimeTimestamps" in nativeOptions) advanced.turns[1]!.activities.push({
+      sourceId: "native-usage-2", timestamp: "2026-01-02T00:00:03.000Z", tone: "info",
+      kind: "context-window.updated", summary: "Context window updated", payload: { usedTokens: 42, outputTokens: 7 },
     });
     const persisted = nativeBuiltinWrite(root, advanced, "codex", nativeOptions);
     const projection = inspectNative(dbPath, persisted.target.threadId).records!;
@@ -220,7 +243,17 @@ describe.skipIf(!fixtureDb)("native provider continuation adoption", () => {
 
     let expectedStoredEvents = before;
     if (expectedStatus === "synced") {
-      expect(result.results[0]).toMatchObject({ status: "synced", threadId: persisted.target.threadId, turnsAdded: 0, turnsAdopted: 1, events: 0 });
+      expect(result.results[0]).toMatchObject({ status: "synced", threadId: persisted.target.threadId, turnsAdded: 0, turnsAdopted: 1, events: "runtimeTimestamps" in nativeOptions ? 1 : 0 });
+      if ("runtimeTimestamps" in nativeOptions) {
+        const after = inspectNative(dbPath, persisted.target.threadId).events;
+        expect(after.length).toBe(before.length + 1);
+        const repeat = await syncConversations([{ conversation: canonicalConversation(workspace, advanced) }], paths, { dryRun: false });
+        expect(repeat.results[0]).toMatchObject({ status: "up-to-date", events: 0, turnsAdopted: 0 });
+        expect(inspectNative(dbPath, persisted.target.threadId).events).toEqual(after);
+        expect(await inspectConversationReplacement(canonicalConversation(workspace, advanced), paths))
+          .toMatchObject({ status: "already-current" });
+        return;
+      }
       const next = structuredClone(advanced);
       next.updatedAt = "2026-01-03T00:00:03.000Z";
       next.turns.push({
@@ -337,9 +370,12 @@ describe.skipIf(!fixtureDb)("native provider continuation adoption", () => {
       id: userId, startedAt: "2026-01-02T00:00:00.000Z", completedAt: "2026-01-02T00:00:03.000Z", status: "completed",
       user: { sourceId: userId, role: "user", text: "Continue", timestamp: "2026-01-02T00:00:00.000Z", attachments: [] },
       assistant: [{ sourceId: `${assistantId}:text:0`, role: "assistant", text: "Done", timestamp: "2026-01-02T00:00:02.000Z", attachments: [] }],
-      activities: [], plans: [],
+      // The native transcript omits this source-derived usage notice. The sync
+      // path must add it once while accepting T3's runtime clocks and origins.
+      activities: [{ sourceId: "claude-usage-2", timestamp: "2026-01-02T00:00:03.000Z", tone: "info",
+        kind: "context-window.updated", summary: "Context window updated", payload: { usedTokens: 42, outputTokens: 7 } }], plans: [],
     });
-    const persisted = nativeBuiltinWrite(root, advanced, "claudeAgent", { userNativeItemId: userId });
+    const persisted = nativeBuiltinWrite(root, advanced, "claudeAgent", { userNativeItemId: userId, runtimeTimestamps: true });
     const projection = inspectNative(dbPath, persisted.target.threadId).records!;
     const checkpoint = checkpointForThread(prefix);
     if (checkpoint.version !== 2) throw new Error("Expected v2 source checkpoint");
@@ -361,8 +397,14 @@ describe.skipIf(!fixtureDb)("native provider continuation adoption", () => {
     const before = inspectNative(dbPath, persisted.target.threadId).events;
     const advancedConversation = canonicalConversation(workspace, advanced);
     const synced = await syncConversations([{ conversation: advancedConversation }], paths, { dryRun: false });
-    expect(synced.results[0]).toMatchObject({ status: "synced", threadId: persisted.target.threadId, turnsAdded: 0, turnsAdopted: 1, events: 0 });
-    expect(inspectNative(dbPath, persisted.target.threadId).events).toEqual(before);
+    expect(synced.results[0]).toMatchObject({ status: "synced", threadId: persisted.target.threadId, turnsAdded: 0, turnsAdopted: 1, events: 1 });
+    const afterFirstSync = inspectNative(dbPath, persisted.target.threadId).events;
+    expect(afterFirstSync).toHaveLength(before.length + 1);
+
+    const repeated = await syncConversations([{ conversation: advancedConversation }], paths, { dryRun: false });
+    expect(repeated.results[0]).toMatchObject({ status: "up-to-date", turnsAdded: 0, turnsAdopted: 0, events: 0 });
+    expect(inspectNative(dbPath, persisted.target.threadId).events).toEqual(afterFirstSync);
+    expect(await inspectConversationReplacement(advancedConversation, paths)).toMatchObject({ status: "already-current" });
   });
 
 });

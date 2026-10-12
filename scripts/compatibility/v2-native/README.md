@@ -19,7 +19,11 @@ node scripts/compatibility/v2-native/source-lock-gate.test.mjs
 ```
 
 Preparation downloads the pinned source material and installs the filtered T3
-workspace dependency graph. The build verifies the pinned T3 release archive,
+workspace dependency graph. The helper and migration fixture resolve T3's
+`@t3tools/shared` imports directly to `packages/shared/src` from that pinned
+checkout. This keeps a clean filtered install independent of workspace links
+left by a broader local install; the exact bundle source-file sets remain
+checked against `source-lock.json`. The build verifies the pinned T3 release archive,
 pnpm lockfile, every traced T3 source file, the exact traced source-file sets for both bundles, and the exact esbuild/npm tarball
 integrities in `source-lock.json` and `build-tool-lock.json`. This build-tool
 lock currently covers Linux x64 only. The build emits a fixture-only migration
@@ -36,8 +40,11 @@ dependencies are unchanged. The shipped `vendor/t3-v2-native-helper.mjs` hash
 is the one recorded in the checked-in manifest and provenance; do not replace
 it based only on a path-sensitive local candidate hash.
 
-`LICENSES.md` and `vendor-manifest.json` are generated alongside this source.
-The manifest records the pinned source and lockfile hashes, helper hash, traced
+The local candidate's `LICENSES.md` and `PROVENANCE.json` are generated under
+ignored `artifacts/v2-native/candidate/`. The checked-in `vendor-manifest.json`
+and `vendor/` helper provenance remain the reviewed release record; a local
+candidate build does not rewrite them. The manifest records the pinned source
+and lockfile hashes, helper hash, traced
 T3 source files, each dependency's exact pnpm-lock integrity, license metadata,
 and hashes of included license files. The notice file includes the T3 MIT
 license and every actual license text file found in the traced dependency

@@ -45,6 +45,10 @@
     "compat:schemas": "node scripts/compatibility/generate-schemas.mjs",
     "test:compatibility": "npm run compat:prepare && tsx scripts/compatibility/run.ts",
     "v2-vendor:check": "node scripts/compatibility/v2-native/vendor-gate.mjs",
+    "test:v2-acceptance-runner": "node --test scripts/compatibility/v2-native/acceptance-runner.test.mjs",
+    "acceptance:v2": "node scripts/compatibility/v2-native/acceptance.mjs",
+    "acceptance:v2:complete-gui": "node scripts/compatibility/v2-native/acceptance.mjs --complete-gui",
+    "test:v2-pinned": "node scripts/compatibility/v2-native/pinned-test.mjs",
     "test:v2-pack": "node scripts/compatibility/v2-native/pack-consumer-test.mjs artifacts/v2-native/fixture.mjs"
   },
   "engines": {

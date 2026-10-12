@@ -8,8 +8,9 @@ Status: implementation design for the exact T3 Code nightly source commit
 
 Historical design baseline for `.2980`. The approved implementation target is
 now `.2994`; use [the nightly comparison](t3-v2-nightly-update-research.md)
-for source changes, and do not treat the earlier proof as `.2994` runtime
-acceptance.
+for source changes. For the current target, checks, and acceptance boundaries,
+use the [T3 v2 acceptance index](t3-v2-acceptance.md); this design and its
+earlier proof are not `.2994` runtime acceptance.
 
 ## Decision
 

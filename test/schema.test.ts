@@ -1,5 +1,5 @@
 import Database from "better-sqlite3";
-import { mkdtempSync, mkdirSync, existsSync, readFileSync, readdirSync, writeFileSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, mkdirSync, existsSync, readFileSync, readdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -87,9 +87,16 @@ it.each([39, 54])("rejects unsupported migration %i without writes", async (migr
 });
 
 it.skipIf(!process.env.T3_V2_FIXTURE_DB || !existsSync(process.env.T3_V2_FIXTURE_DB))("accepts a current v2 thread cursor with retained v1 rows beyond it", () => {
-  const fixture = process.env.T3_V2_FIXTURE_DB!;
-  const db = new Database(fixture, { readonly: true });
+  const fixture = join(root, "retained-v1.sqlite");
+  copyFileSync(process.env.T3_V2_FIXTURE_DB!, fixture);
+  const db = new Database(fixture);
   try {
+    const latest = db.prepare("SELECT COALESCE(MAX(sequence), 0) sequence FROM orchestration_events").get() as { sequence: number };
+    db.prepare(`INSERT INTO orchestration_events (
+      sequence, event_id, aggregate_kind, stream_id, stream_version, event_type, occurred_at,
+      actor_kind, payload_json, metadata_json, application_event_version
+    ) VALUES (?, 'retained-v1-tail', 'thread', 'retained-v1-thread', 1, 'thread.created',
+      '2026-01-01T00:00:00.000Z', 'system', '{}', '{}', 1)`).run(latest.sequence + 100);
     const retainedV1Tail = db.prepare("SELECT MAX(sequence) sequence FROM orchestration_events WHERE application_event_version = 1").get() as { sequence: number | null };
     const metadata = db.prepare("SELECT last_sequence FROM orchestration_v2_projection_metadata WHERE projection_name = 'thread-projections'").get() as { last_sequence: number };
     expect(retainedV1Tail.sequence).toBeGreaterThan(metadata.last_sequence);

@@ -11,13 +11,17 @@ does not satisfy `.2994` acceptance.
 
 **References:** [Support spec](../../../docs/t3-v2-support-spec.md) · [Research](../../../docs/t3-v2-support-research.md) · [Design](../../../docs/t3-v2-native-design.md) · [Completed writer proof](../../../docs/t3-v2-proof.md) (evidence, not a ticket).
 
-**Status:** in-progress
+**Status:** done
 
-The user has deferred the isolated GUI acceptance gate. Automated runtime and
-provider-session checks continue; desktop inspection remains blocked by this
-choice until the user resumes that gate.
+Completed 2026-10-12 on the approved `.2994` runtime. Both isolated GUI
+fixtures render messages, images, plans/activity and replacement after viewing.
+Both real native provider continuations reconcile without replaying messages,
+retain source usage, and repeat synchronization with zero events. Unchanged
+native tasks also return `already-current` for replacement. Upgrade recovery,
+legacy compatibility, package checks, and negative ownership checks pass. See
+[final acceptance](../../../docs/t3-v2-real-provider-acceptance.md#final-retake-2026-10-12).
 
-- [ ] Existing supported T3 migrations 40–53 and relevant test, typecheck, build, and package checks pass.
-- [ ] In an isolated T3 home, desktop inspection confirms messages, images, plans/activity, replacement visibility, and one synchronization owner.
-- [ ] Minimal disposable Codex and Claude continuations use the original native session/branch; follow-up sync recognizes the resulting turns without duplicates.
-- [ ] The pinned runtime and all checks leave the user's normal T3 home untouched; results and any remaining compatibility limits are recorded.
+- [x] Existing supported T3 migrations 40–53 and relevant test, typecheck, build, and package checks pass.
+- [x] In an isolated T3 home, desktop inspection confirms messages, images, plans/activity, replacement visibility, and one synchronization owner.
+- [x] Minimal disposable Codex and Claude continuations use the original native session/branch; follow-up sync recognizes the resulting turns without duplicates.
+- [x] The pinned runtime and all checks leave the user's normal T3 home untouched; results and any remaining compatibility limits are recorded.
