@@ -2,10 +2,11 @@ import Database from "better-sqlite3";
 import { randomUUID } from "node:crypto";
 import type { CanonicalConversation, CanonicalThread, ConversationSyncPreview, SyncItemResult, SyncRunResult, TargetPaths } from "../../core/types.js";
 import { isTerminalTurn } from "../../core/types.js";
-import { checkpointForThread, legacyTurnSemanticHash, turnSemanticHash, type ImportCheckpoint, type ImportCheckpointV1, type ImportCheckpointV2 } from "../../core/checkpoint.js";
+import { checkpointForThread, legacyTurnSemanticHash, turnSemanticHash, type ImportCheckpoint, type ImportCheckpointV1, type ImportCheckpointV2, type NativeProjectionIdentityV1 } from "../../core/checkpoint.js";
 import { canonicalPath, deterministicUuid, sha256 } from "../../core/util.js";
 import { safetyError } from "../../core/errors.js";
 import { acquireLock, callV2Native, createBackup, materializeAssets, planV2Thread, type V2ThreadReply } from "../importer.js";
+import { captureNativeProjectionIdentity, projectedHistoryMatches, nativeProjectionIdentityMatches } from "./history.js";
 import { assertT3Closed, validateTargetDatabase } from "../schema.js";
 import { listImports, recordImports, type LedgerRecord, type StoredLedgerRecord } from "../ledger.js";
 
@@ -66,11 +67,52 @@ function providerThreadFor(target: V2ThreadReply, threadId: string): Record<stri
   return matches.length === 1 ? matches[0] as Record<string, any> : undefined;
 }
 
-function historyMatchesPrefix(target: V2ThreadReply, plan: ReturnType<typeof planV2Thread>, turns: CanonicalThread["turns"]): boolean {
+function historyMatchesPrefix(target: V2ThreadReply, plan: ReturnType<typeof planV2Thread>, turns: CanonicalThread["turns"], nativeProjection?: NativeProjectionIdentityV1): boolean {
   const records = recordsOf(target);
   const expected = plan.events;
   const expectedMessages = expected.filter((item) => item.type === "message.updated").map((item) => item.payload as Record<string, any>);
   const actualMessages = records.messages ?? [];
+  if (nativeProjection) {
+    const expectedItems = expected.filter((item) => item.type === "turn-item.updated").map((item) => item.payload as Record<string, any>);
+    const expectedPlans = expected.filter((item) => item.type === "plan.updated").map((item) => item.payload as Record<string, any>);
+    if (nativeProjection.messages.length > expectedMessages.length
+      || nativeProjection.turnItems.length > expectedItems.length
+      || nativeProjection.plans.length > expectedPlans.length
+      || actualMessages.length < expectedMessages.length
+      || (records.turnItems ?? []).length < expectedItems.length
+      || (records.plans ?? []).length < expectedPlans.length) return false;
+    if (!nativeProjectionIdentityMatches({
+      messages: actualMessages.slice(0, nativeProjection.messages.length),
+      turnItems: (records.turnItems ?? []).slice(0, nativeProjection.turnItems.length),
+      plans: (records.plans ?? []).slice(0, nativeProjection.plans.length),
+    }, nativeProjection)) return false;
+    // Rows added after the verified native prefix must retain t3-import's own
+    // deterministic IDs; semantic comparison applies only to the saved prefix.
+    if (!expectedMessages.slice(nativeProjection.messages.length).every((message, offset) => actualMessages[nativeProjection.messages.length + offset]?.id === message.id)
+      || !expectedItems.slice(nativeProjection.turnItems.length).every((item, offset) => records.turnItems?.[nativeProjection.turnItems.length + offset]?.id === item.id)
+      || !expectedPlans.slice(nativeProjection.plans.length).every((planRecord, offset) => records.plans?.[nativeProjection.plans.length + offset]?.id === planRecord.id)) return false;
+    const prefixRecords = {
+      messages: actualMessages.slice(0, expectedMessages.length),
+      turnItems: (records.turnItems ?? []).slice(0, expectedItems.length),
+      plans: (records.plans ?? []).slice(0, expectedPlans.length),
+    };
+    if (!projectedHistoryMatches(prefixRecords, expected, { identity: "semantic" })) return false;
+    const nativeMessageIds = nativeProjection.messages;
+    const actualItems = prefixRecords.turnItems ?? [];
+    for (let index = 0; index < expectedItems.length; index++) {
+      const sourceMessageId = expectedItems[index]?.messageId;
+      if (typeof sourceMessageId !== "string") continue;
+      const sourceMessageIndex = expectedMessages.findIndex((message) => message.id === sourceMessageId);
+      const actual = actualItems[index];
+      if (sourceMessageIndex >= 0) {
+        const actualMessageId = sourceMessageIndex < nativeProjection.messages.length
+          ? nativeMessageIds[sourceMessageIndex]
+          : expectedMessages[sourceMessageIndex]?.id;
+        if (actual?.messageId !== actualMessageId) return false;
+      }
+    }
+    return turns.length > 0;
+  }
   if (actualMessages.length < expectedMessages.length) return false;
   const messageById = new Map(actualMessages.map((item) => [item.id, item]));
   if (!expectedMessages.every((item) => {
@@ -188,10 +230,12 @@ async function buildV2Plan(conversation: CanonicalConversation, paths: TargetPat
   const checkpointLength = checkpointPrefix(thread, record.checkpoint);
   if (checkpointLength === undefined) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["Previously imported source history was edited or deleted; synchronization left the T3 task unchanged."], resumable: record.resumable };
   const identityThread = { ...thread, sourceKey: record.identitySeed };
-  const fullPlan = planV2Thread({ conversation, resume: record.resumable }, identityThread, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId));
+  const nativeProjection = record.checkpoint?.version === 2 ? record.checkpoint.nativeProjection : undefined;
+  const plannerOptions = { threadId: record.threadId };
+  const fullPlan = planV2Thread({ conversation, resume: record.resumable }, identityThread, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId), plannerOptions);
   const expectedPrefix = { ...identityThread, turns: thread.turns.slice(0, checkpointLength) };
-  const prefixPlan = planV2Thread({ conversation, resume: record.resumable }, expectedPrefix, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId));
-  if (!historyMatchesPrefix(target, prefixPlan, expectedPrefix.turns)) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["T3 history no longer matches the imported source prefix; synchronization left the task unchanged."], resumable: record.resumable };
+  const prefixPlan = planV2Thread({ conversation, resume: record.resumable }, expectedPrefix, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId), plannerOptions);
+  if (!historyMatchesPrefix(target, prefixPlan, expectedPrefix.turns, nativeProjection)) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["T3 history no longer matches the imported source prefix; synchronization left the task unchanged."], resumable: record.resumable };
   const prefixMessageCount = prefixPlan.messages.length;
   const adopted = adoptionCount(target, thread.turns, checkpointLength, prefixMessageCount, fullPlan);
   if (adopted < 0) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["T3 contains an ambiguous, partial, active, or divergent turn suffix; synchronization left the task unchanged."], resumable: record.resumable };
@@ -201,7 +245,7 @@ async function buildV2Plan(conversation: CanonicalConversation, paths: TargetPat
     ...(typeof oldHead?.nativeId === "string" ? { nativeHeadId: oldHead.nativeId } : {}) };
   if (added.length) {
     const nextThread = { ...identityThread, turns: added };
-    const planned = planV2Thread({ conversation, resume: record.resumable }, nextThread, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId));
+    const planned = planV2Thread({ conversation, resume: record.resumable }, nextThread, paths, record.projectId, false, String(nativeThread.providerInstanceId ?? projected.providerInstanceId), plannerOptions);
     const historyEvents = planned.events.filter((event) => event.type === "message.updated" || event.type === "turn-item.updated" || event.type === "plan.updated");
     const ordinalBase = Math.max(0, ...(target.records?.turnItems ?? []).map((item) => typeof item.ordinal === "number" ? item.ordinal : 0));
     let ordinal = ordinalBase;
@@ -289,6 +333,7 @@ export async function syncV2Conversations(selections: Array<{ conversation: Cano
     const ledger: LedgerRecord[] = [];
     for (const plan of writable) {
       const record = plan.record!;
+      let projectedAfterWrite = plan.target?.records;
       let lastSequence = record.lastSequence;
       let firstSequence = record.lastSequence + 1;
       if (plan.events?.length) {
@@ -310,15 +355,22 @@ export async function syncV2Conversations(selections: Array<{ conversation: Cano
           activeProvider: readbackThread?.activeProviderThreadId === binding.id,
           providerBinding: Boolean(actualBinding && JSON.stringify(actualBinding.nativeThreadRef ?? null) === JSON.stringify(binding.nativeThreadRef ?? null)),
           conversationHead: Boolean(actualBinding && JSON.stringify(actualBinding.nativeConversationHeadRef ?? null) === JSON.stringify(expectedHead?.nativeConversationHeadRef ?? binding.nativeConversationHeadRef ?? null)),
-          history: Boolean(readback && plan.fullPlan && historyMatchesPrefix(readback, plan.fullPlan, plan.thread.turns)),
+          history: Boolean(readback && plan.fullPlan && historyMatchesPrefix(readback, plan.fullPlan, plan.thread.turns,
+            record.checkpoint?.version === 2 ? record.checkpoint.nativeProjection : undefined)),
         };
         if (Object.values(verified).some((value) => !value)) {
           throw safetyError(`T3 v2 append could not be verified for ${plan.thread.sourceSessionId} (exists=${verified.exists}, project=${verified.project}, activeProvider=${verified.activeProvider}, providerBinding=${verified.providerBinding}, conversationHead=${verified.conversationHead}, history=${verified.history}); the verified backup is ${backup ?? record.backupPath}.`);
         }
+        projectedAfterWrite = readback?.records ?? readback?.snapshot?.records ?? projectedAfterWrite;
         firstSequence = result.storedSequenceRange?.first ?? firstSequence;
         lastSequence = result.storedSequenceRange?.last ?? record.lastSequence;
       }
       const checkpoint = checkpointForThread(plan.thread);
+      if (record.checkpoint?.version === 2 && record.checkpoint.nativeProjection) {
+        const identity = captureNativeProjectionIdentity(projectedAfterWrite);
+        if (!identity) throw safetyError(`T3 did not return projected native history identities for ${plan.thread.sourceSessionId}; the verified backup is ${backup ?? record.backupPath}.`);
+        checkpoint.nativeProjection = identity;
+      }
       ledger.push({ ...record, sourceFingerprint: plan.conversation.fingerprint, currentSourceKey: plan.thread.sourceKey,
         ...(plan.thread.leafId ? { sourceLeafId: plan.thread.leafId } : {}), sourceTitle: plan.thread.title,
         ...(plan.thread.source === "claude" && plan.resumable && plan.nativeHeadId ? { nativeConversationHeadId: plan.nativeHeadId } : {}),

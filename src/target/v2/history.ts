@@ -1,5 +1,6 @@
 import { basename, extname, join } from "node:path";
 import type { CanonicalActivity, CanonicalMessage, CanonicalThread, CanonicalTurn } from "../../core/types.js";
+import type { NativeProjectionIdentityV1 } from "../../core/checkpoint.js";
 import { deterministicUuid, truncate } from "../../core/util.js";
 
 export interface V2HistoryAsset {
@@ -22,6 +23,23 @@ type ProjectedHistoryRecords = {
   turnItems?: Array<Record<string, unknown>>;
   plans?: Array<Record<string, unknown>>;
 };
+
+/** Capture target row identities after the caller has verified semantic history and ownership. */
+export function captureNativeProjectionIdentity(records: ProjectedHistoryRecords | undefined): NativeProjectionIdentityV1 | undefined {
+  if (!records?.messages || !records.turnItems || !records.plans) return undefined;
+  const ids = [records.messages, records.turnItems, records.plans].map((rows) => rows.map((row) => row.id));
+  if (!ids.every((items) => items.every((id) => typeof id === "string" && id.length > 0)
+    && new Set(items).size === items.length)) return undefined;
+  return { kind: "semantic-native-prefix-v1", messages: ids[0] as string[], turnItems: ids[1] as string[], plans: ids[2] as string[] };
+}
+
+/** Require the verified stored identities to remain the ordered prefix of projected history. */
+export function nativeProjectionIdentityMatches(records: ProjectedHistoryRecords | undefined, identity: NativeProjectionIdentityV1): boolean {
+  if (!records?.messages || !records.turnItems || !records.plans) return false;
+  const actualIds = [records.messages, records.turnItems, records.plans].map((rows) => rows.map((row) => row.id));
+  return [identity.messages, identity.turnItems, identity.plans].every((expected, index) =>
+    expected.every((id, rowIndex) => actualIds[index]?.[rowIndex] === id));
+}
 
 function sameProjectedValue(left: unknown, right: unknown): boolean {
   return JSON.stringify(left) === JSON.stringify(right);

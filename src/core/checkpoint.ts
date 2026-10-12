@@ -23,6 +23,15 @@ export interface TurnCheckpointV2 {
 export interface ImportCheckpointV2 {
   version: 2;
   turns: TurnCheckpointV2[];
+  /** Ordered target record IDs captured only after full native-history verification. */
+  nativeProjection?: NativeProjectionIdentityV1;
+}
+
+export interface NativeProjectionIdentityV1 {
+  kind: "semantic-native-prefix-v1";
+  messages: string[];
+  turnItems: string[];
+  plans: string[];
 }
 
 export type ImportCheckpoint = ImportCheckpointV1 | ImportCheckpointV2;
@@ -98,6 +107,11 @@ export function parseCheckpoint(value: string | null | undefined): ImportCheckpo
     if (parsed.version === 1) return parsed;
     if (parsed.version !== 2) return undefined;
     if (!parsed.turns.every((turn) => ["completed", "interrupted", "failed"].includes(turn.status))) return undefined;
+    const projection = parsed.nativeProjection;
+    if (projection !== undefined && (projection.kind !== "semantic-native-prefix-v1"
+      || ![projection.messages, projection.turnItems, projection.plans].every((ids) => Array.isArray(ids)
+        && ids.every((id) => typeof id === "string" && id.length > 0)
+        && new Set(ids).size === ids.length))) return undefined;
     return parsed;
   } catch {
     return undefined;

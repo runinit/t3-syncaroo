@@ -1,7 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { projectedHistoryMatches } from "../src/target/v2/history.js";
+import { captureNativeProjectionIdentity, nativeProjectionIdentityMatches, projectedHistoryMatches } from "../src/target/v2/history.js";
 
 describe("projectedHistoryMatches", () => {
+  it("captures and pins ordered native record IDs separately from semantic content", () => {
+    const records = {
+      messages: [{ id: "native-message-1" }, { id: "native-message-2" }],
+      turnItems: [{ id: "native-item-1" }, { id: "native-item-2" }],
+      plans: [{ id: "native-plan-1" }],
+    };
+    const identity = captureNativeProjectionIdentity(records);
+    expect(identity).toEqual({
+      kind: "semantic-native-prefix-v1",
+      messages: ["native-message-1", "native-message-2"],
+      turnItems: ["native-item-1", "native-item-2"],
+      plans: ["native-plan-1"],
+    });
+    expect(nativeProjectionIdentityMatches(records, identity!)).toBe(true);
+    expect(nativeProjectionIdentityMatches({ ...records, messages: [{ id: "replacement" }, records.messages[1]!] }, identity!)).toBe(false);
+    expect(captureNativeProjectionIdentity({ ...records, messages: [{ id: "duplicate" }, { id: "duplicate" }] })).toBeUndefined();
+  });
+
   it("matches complete projected turn items and plans without depending on event IDs", () => {
     const expected = [
       { id: "new-message-event-id", type: "message.updated", payload: { id: "expected-message", threadId: "expected-thread", role: "user", text: "hello", attachments: [] } },
