@@ -53,7 +53,7 @@ describe("replace CLI", () => {
 describe("global target options", () => {
   it("describes --db as a T3 state database override", () => {
     const result = cli(["--help"]);
-    expect(result.status).toBe(0);
+    expect(result.status).toBe(7);
     expect(result.stdout).toMatch(/--db <path>\s+T3 state database path/u);
   });
 
@@ -200,6 +200,25 @@ describe("global target options", () => {
     expect(payload.outcomes).toEqual([expect.objectContaining({ sessionId, outcome: expect.objectContaining({ kind: "deferred", phase: "preview", nextAction: expect.stringContaining("Import this conversation") }) })]);
     expect(payload.diagnostics).toEqual([]);
     expect(payload.counts).toMatchObject({ classified: 1, deferred: 1, scanDiagnostics: 0 });
+  });
+
+  it("deduplicates repeated explicit sync session IDs", () => {
+    const root = mkdtempSync(join(tmpdir(), "t3-import-cli-sync-duplicate-selection-"));
+    const workspace = join(root, "workspace");
+    const sessions = join(root, "sessions");
+    mkdirSync(workspace, { recursive: true });
+    mkdirSync(sessions, { recursive: true });
+    const target = createTarget(join(root, "t3"));
+    const sessionId = "bbbbbbbb-cccc-4ddd-8eee-ffffffffffff";
+    writeCodexConversation(join(sessions, "conversation.jsonl"), sessionId, workspace);
+    const result = cli(["--json", "--t3-home", target.t3Home, "sync", "--source", "codex", "--workspace", workspace, "--thread", sessionId, "--thread", sessionId, "--dry-run", "--yes"], {
+      ...process.env,
+      CODEX_HOME: root,
+      CODEX_BIN: join(root, "missing-codex"),
+    });
+    expect(result.status).toBe(7);
+    const payload = JSON.parse(result.stdout) as { results: Array<{ sourceId: string }> };
+    expect(payload.results).toEqual([expect.objectContaining({ sourceId: sessionId })]);
   });
 
   it("keeps incompatible targets as hard failures when source loading yields no sessions", () => {
