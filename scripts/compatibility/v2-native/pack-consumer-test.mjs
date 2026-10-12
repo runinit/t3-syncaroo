@@ -93,10 +93,11 @@ assert.equal(inspect().projectionMetadata[0]?.lastSequence, beforeRetry);
 
 rows[3].payload.content[0].text = "Changed history";
 await writeFile(sessionPath, `${rows.map((row) => JSON.stringify(row)).join("\n")}\n`);
-const conflict = spawnSync(process.execPath, importArgs, { cwd: consumer, env: environment, encoding: "utf8" });
-assert.notEqual(conflict.status, 0);
-assert.match(`${conflict.stderr}${conflict.stdout}`, /different task/u);
+const conflict = JSON.parse(run(process.execPath, importArgs, { cwd: consumer, env: environment }).stdout);
+assert.equal(conflict.status, "mixed");
+assert.equal(conflict.results?.[0]?.status, "conflict");
+assert.match(conflict.results?.[0]?.warnings?.join("\n") ?? "", /converted T3 history is incomplete or differs/u);
 assert.equal(inspect().projectionMetadata[0]?.lastSequence, beforeRetry);
 
 console.log(JSON.stringify({ result: "PASS", package: packed.name, version: packed.version, helperBytes: afterWrite ? (await (await import("node:fs/promises")).stat(helper)).size : 0,
-  import: first.status, retry: retry.status, divergentHistoryRejected: true, nativeReadback: true, temp }));
+  import: first.status, retry: retry.status, divergentHistoryRejected: true, structuredConflict: true, nativeReadback: true, temp }));
