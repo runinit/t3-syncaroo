@@ -117,6 +117,40 @@ four messages and one completed run. The rejected command did not persist its
 user message, create another run, or call the provider. The test setting and
 thread were private to the disposable T3 home.
 
+## Actual built-in history import RPC
+
+To give the public importer a target created by T3's own history-import path, I
+started a second `.2994` server with a fresh disposable T3 home at
+`/tmp/t3-v2-builtin-import-2994/t3-home`, pointed its enabled provider
+instances at the existing disposable seed homes, and made no provider calls.
+The official `agentSessions.scan` RPC found one project candidate containing
+the original two seeded sessions. I created that project through
+`projects.mutate`, then called `agentSessions.import` with its project ID and
+expected workspace root. The pinned implementation is
+[`AgentSessionScanner`](https://github.com/pingdotgg/t3code/blob/d07a07f33c0a1b317dea6234636976231c3688b5/apps/server/src/project/AgentSessionScanner.ts)
+and
+[`AgentSessionImporter`](https://github.com/pingdotgg/t3code/blob/d07a07f33c0a1b317dea6234636976231c3688b5/apps/server/src/project/AgentSessionImporter.ts);
+the RPC contracts are in
+[`agentSessions.ts`](https://github.com/pingdotgg/t3code/blob/d07a07f33c0a1b317dea6234636976231c3688b5/packages/contracts/src/agentSessions.ts).
+
+The first call returned `importedCount: 2, skippedCount: 0`. Native readback
+showed actual T3-generated `v1_import` threads with these IDs:
+`import:codex:01a12d9f-0d98-74f2-9b12-b4226632c3f3` and
+`import:claudeAgent:e724c029-6a50-46dc-b69b-cd8066669d31`. Each carries a strong
+`nativeThreadRef` to the corresponding original source session. The Codex task
+projects 6 user and 3 assistant messages; the Claude task projects 2 user and 2
+assistant messages. A repeat call returned the same counts and left the event
+store at 31 events, confirming that this built-in path records imported-source
+identity and avoids creating duplicate tasks.
+
+The sanitized readback, event counts, project/thread IDs, and source references
+are in [the JSON evidence artifact](t3-v2-builtin-import-evidence.json). It
+contains no transcript text or auth material. This is the concrete actual
+`.2994` built-in-import fixture for the public t3-import adoption retake; it
+does not itself prove t3-import adoption, which remains pending the merged 07
+hook and its runtime retest. The exact server was stopped, and the private log
+and cached access token were sanitized/cleared.
+
 ## Remaining gates
 
 - Retest Codex sync after the manual-context parser fix.

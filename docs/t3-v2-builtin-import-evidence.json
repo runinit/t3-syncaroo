@@ -1,0 +1,79 @@
+{
+  "target": {
+    "version": "0.0.46-nightly.20261011.2994",
+    "commit": "d07a07f33c0a1b317dea6234636976231c3688b5",
+    "appImageSha256": "e8c01c767c16cbeb9181dc04f4f1bbc88553b12b746c17f4e9189f266bf036e7"
+  },
+  "isolation": {
+    "t3Home": "/tmp/t3-v2-builtin-import-2994/t3-home",
+    "loopbackPort": 51461,
+    "providerHomes": "Previously seeded disposable Codex and Claude homes; no new provider prompts were sent.",
+    "normalT3HomeOrProviderHistoryTouched": false,
+    "desktopLaunched": false
+  },
+  "officialFeaturePath": {
+    "scanner": "apps/server/src/project/AgentSessionScanner.ts",
+    "importer": "apps/server/src/project/AgentSessionImporter.ts",
+    "contracts": "packages/contracts/src/agentSessions.ts",
+    "rpcMethods": ["agentSessions.scan", "agentSessions.import"],
+    "projectRegistrationRpc": "projects.mutate"
+  },
+  "scan": {
+    "candidateCount": 1,
+    "sources": ["claudeAgent", "codex"],
+    "sessionCount": 2,
+    "alreadyImported": false
+  },
+  "projectId": "ef39ff71-7e7c-4826-8aa7-efb82c9c6dc9",
+  "import": {
+    "firstCall": { "importedCount": 2, "skippedCount": 0 },
+    "repeatCall": { "importedCount": 2, "skippedCount": 0 },
+    "eventCountBeforeRepeat": 31,
+    "eventCountAfterRepeat": 31
+  },
+  "threads": [
+    {
+      "source": "codex",
+      "sourceSessionId": "01a12d9f-0d98-74f2-9b12-b4226632c3f3",
+      "threadId": "import:codex:01a12d9f-0d98-74f2-9b12-b4226632c3f3",
+      "providerThreadId": "provider-thread:provider:codex:native-thread:01a12d9f-0d98-74f2-9b12-b4226632c3f3",
+      "nativeThreadRef": {
+        "driver": "codex",
+        "nativeId": "01a12d9f-0d98-74f2-9b12-b4226632c3f3",
+        "strength": "strong"
+      },
+      "nativeConversationHeadRef": null,
+      "historyOrigin": "v1_import",
+      "settledOverride": "settled",
+      "projectedMessagesByRole": { "user": 6, "assistant": 3 },
+      "eventCounts": {
+        "thread.created": 1,
+        "message.updated": 9,
+        "turn-item.updated": 9,
+        "provider-thread.updated": 1
+      }
+    },
+    {
+      "source": "claudeAgent",
+      "sourceSessionId": "e724c029-6a50-46dc-b69b-cd8066669d31",
+      "threadId": "import:claudeAgent:e724c029-6a50-46dc-b69b-cd8066669d31",
+      "providerThreadId": "provider-thread:provider:claudeAgent:native-thread:e724c029-6a50-46dc-b69b-cd8066669d31",
+      "nativeThreadRef": {
+        "driver": "claudeAgent",
+        "nativeId": "e724c029-6a50-46dc-b69b-cd8066669d31",
+        "strength": "strong"
+      },
+      "nativeConversationHeadRef": null,
+      "historyOrigin": "v1_import",
+      "settledOverride": "settled",
+      "projectedMessagesByRole": { "user": 2, "assistant": 2 },
+      "eventCounts": {
+        "thread.created": 1,
+        "message.updated": 4,
+        "turn-item.updated": 4,
+        "provider-thread.updated": 1
+      }
+    }
+  ],
+  "contentPolicy": "Transcript text, pairing/access tokens, credentials, cookie values, and private auth logs are intentionally omitted."
+}
