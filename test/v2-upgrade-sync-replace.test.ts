@@ -208,4 +208,20 @@ describe.skipIf(!t3SourceDir || !existsSync(t3SourceDir))("public sync and repla
     } finally { backup.close(); }
     expect(readdirSync(backupDirectory).filter((name) => name.startsWith("replacement-") && name.endsWith(".json"))).toEqual([]);
   });
+
+  it("does not replace a converted task whose native shell is already deleted", async () => {
+    const { fixture, paths, thread } = await upgradedCodexFixture("t3-v2-upgrade-replace-deleted-");
+    appendFollowup(thread);
+    const conversation = canonicalConversation(thread.workspace, thread);
+    const db = new Database(fixture.dbPath);
+    db.prepare("UPDATE orchestration_v2_projection_threads SET deleted_at = ? WHERE thread_id = ?")
+      .run("2026-02-01T00:00:00.000Z", fixture.threadId);
+    db.close();
+    const before = eventCount(fixture.dbPath);
+
+    const result = await replaceConversations([{ conversation }], paths, { dryRun: false });
+
+    expect(result.results[0]).toMatchObject({ status: "target-missing", oldThreadId: fixture.threadId });
+    expect(eventCount(fixture.dbPath)).toBe(before);
+  });
 });
