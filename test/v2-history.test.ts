@@ -18,6 +18,7 @@ describe("projectedHistoryMatches", () => {
     expect(nativeProjectionIdentityMatches(records, identity!)).toBe(true);
     expect(nativeProjectionIdentityMatches({ ...records, messages: [{ id: "replacement" }, records.messages[1]!] }, identity!)).toBe(false);
     expect(captureNativeProjectionIdentity({ ...records, messages: [{ id: "duplicate" }, { id: "duplicate" }] })).toBeUndefined();
+    expect(captureNativeProjectionIdentity({ ...records, messages: [] })).toBeUndefined();
   });
 
   it("matches complete projected turn items and plans without depending on event IDs", () => {

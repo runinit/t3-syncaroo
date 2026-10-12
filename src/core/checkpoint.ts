@@ -109,6 +109,7 @@ export function parseCheckpoint(value: string | null | undefined): ImportCheckpo
     if (!parsed.turns.every((turn) => ["completed", "interrupted", "failed"].includes(turn.status))) return undefined;
     const projection = parsed.nativeProjection;
     if (projection !== undefined && (projection.kind !== "semantic-native-prefix-v1"
+      || projection.messages.length === 0 || projection.turnItems.length === 0
       || ![projection.messages, projection.turnItems, projection.plans].every((ids) => Array.isArray(ids)
         && ids.every((id) => typeof id === "string" && id.length > 0)
         && new Set(ids).size === ids.length))) return undefined;

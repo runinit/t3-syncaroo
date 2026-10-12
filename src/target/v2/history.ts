@@ -28,7 +28,7 @@ type ProjectedHistoryRecords = {
 export function captureNativeProjectionIdentity(records: ProjectedHistoryRecords | undefined): NativeProjectionIdentityV1 | undefined {
   if (!records?.messages || !records.turnItems || !records.plans) return undefined;
   const ids = [records.messages, records.turnItems, records.plans].map((rows) => rows.map((row) => row.id));
-  if (!ids.every((items) => items.every((id) => typeof id === "string" && id.length > 0)
+  if (ids[0]?.length === 0 || ids[1]?.length === 0 || !ids.every((items) => items.every((id) => typeof id === "string" && id.length > 0)
     && new Set(items).size === items.length)) return undefined;
   return { kind: "semantic-native-prefix-v1", messages: ids[0] as string[], turnItems: ids[1] as string[], plans: ids[2] as string[] };
 }
