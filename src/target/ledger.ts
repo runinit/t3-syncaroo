@@ -192,9 +192,9 @@ export function recordConsolidation(oldRecords: StoredLedgerRecord[], newRecord:
           project_id, thread_id, imported_at, importer_version, migration,
           first_sequence, last_sequence, resumable, backup_path, warnings_json,
           identity_seed, current_source_key, source_leaf_id, source_title,
-          checkpoint_version, checkpoint_json, synced_at, is_canonical,
+          native_conversation_head_id, checkpoint_version, checkpoint_json, synced_at, is_canonical,
           superseded_by_thread_id, replaced_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       insert.run(
         newRecord.targetId, newRecord.source, newRecord.sourceSessionId, newRecord.sourceKey,
@@ -202,7 +202,8 @@ export function recordConsolidation(oldRecords: StoredLedgerRecord[], newRecord:
         newRecord.importerVersion, newRecord.migration, newRecord.firstSequence, newRecord.lastSequence,
         newRecord.resumable ? 1 : 0, newRecord.backupPath, JSON.stringify(newRecord.warnings),
         newRecord.identitySeed, newRecord.currentSourceKey, newRecord.sourceLeafId ?? null,
-        newRecord.sourceTitle, newRecord.checkpoint.version, JSON.stringify(newRecord.checkpoint),
+        newRecord.sourceTitle, newRecord.nativeConversationHeadId ?? null,
+        newRecord.checkpoint.version, JSON.stringify(newRecord.checkpoint),
         newRecord.syncedAt ?? null, 1, null, replacedAt,
       );
     })();
