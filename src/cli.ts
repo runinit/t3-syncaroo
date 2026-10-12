@@ -9,7 +9,7 @@ import { stdin as input, stdout as output } from "node:process";
 import { z } from "zod";
 import { ImportTui } from "./tui.js";
 import { ImporterError, usageError } from "./core/errors.js";
-import type { ImportRunResult, ReplaceRunResult, SourceName, SourceSummary, SyncRunResult } from "./core/types.js";
+import type { CanonicalConversation, DiscoveryOptions, ImportRunResult, ReplaceRunResult, SessionOutcomeRecord, SourceAdapter, SourceName, SourceSummary, SyncRunResult } from "./core/types.js";
 import { disposeSourceAdapters, sourceAdapter } from "./sources/index.js";
 import { resolveTargetPaths, type TargetOverrides } from "./target/config.js";
 import { IMPORTER_VERSION, importConversations } from "./target/importer.js";
@@ -17,6 +17,7 @@ import { inspectRuntime, validateTargetDatabase } from "./target/schema.js";
 import { inspectConversationSync, syncConversations } from "./target/sync.js";
 import { replaceConversations } from "./target/replace.js";
 import { discoverT3CacheProfiles, formatCacheResetResult, resetT3RebuildableCache } from "./target/cache.js";
+import { missingSourceSessionOutcome, sourceLoadFailureOutcome } from "./sources/files.js";
 
 const sourceSchema = z.enum(["codex", "claude"]);
 const program = new Command();
@@ -29,6 +30,9 @@ function globalOverrides(): TargetOverrides {
 function isJson(): boolean { return Boolean(program.opts<{ json?: boolean }>().json); }
 function shouldResetCache(): boolean { return program.opts<{ cacheReset?: boolean }>().cacheReset !== false; }
 function print(value: unknown): void { console.log(isJson() ? JSON.stringify(value) : typeof value === "string" ? value : JSON.stringify(value, null, 2)); }
+function formatOutcomes(outcomes: SessionOutcomeRecord[]): string {
+  return outcomes.map((item) => `- ${item.outcome.kind} (${item.source}${item.sessionId ? ` ${item.sessionId}` : ""}) ${item.displayName}: ${item.outcome.message}${item.sourcePath ? `\n  ${item.sourcePath}` : ""}\n  Next: ${item.outcome.nextAction}`).join("\n");
+}
 function parseSince(value?: string): Date | undefined {
   if (!value) return undefined;
   const parsed = new Date(value);
@@ -62,6 +66,23 @@ async function confirmCacheReset(): Promise<boolean> {
   const prompt = createInterface({ input, output });
   try { return /^(y|yes)$/iu.test((await prompt.question("Reset T3's rebuildable IndexedDB cache? A verified backup will be created. [y/N] ")).trim()); }
   finally { prompt.close(); }
+}
+
+async function loadSelected(adapter: SourceAdapter, summaries: SourceSummary[], options: DiscoveryOptions): Promise<{ conversations: CanonicalConversation[]; outcomes: SessionOutcomeRecord[] }> {
+  const attempts = await Promise.all(summaries.map(async (summary) => {
+    try { return { conversation: await adapter.load(summary, options) }; }
+    catch { return { outcome: sourceLoadFailureOutcome(summary) }; }
+  }));
+  return {
+    conversations: attempts.flatMap((attempt) => attempt.conversation ? [attempt.conversation] : []),
+    outcomes: attempts.flatMap((attempt) => attempt.outcome ? [attempt.outcome] : []),
+  };
+}
+
+function reportNoLoadedSessions(paths: ReturnType<typeof resolveTargetPaths>, outcomes: SessionOutcomeRecord[]): void {
+  const message = `No conversations were loaded for this operation.${outcomes.length ? `\n${formatOutcomes(outcomes)}` : ""}`;
+  print(isJson() ? { schemaVersion: 1, status: "no-op", target: paths.dbPath, results: [], outcomes } : message);
+  if (outcomes.length) process.exitCode = 6;
 }
 
 async function attachCacheReset<T extends ImportRunResult | SyncRunResult | ReplaceRunResult>(
@@ -104,10 +125,9 @@ program.command("list")
   .option("--since <date>", "ISO date/time")
   .action(async (options: { source: string; workspace?: string; since?: string }) => {
     const since = parseSince(options.since);
-    const summaries = await sourceAdapter(sourceName(options.source)).discover({ ...(options.workspace ? { workspace: options.workspace } : {}), ...(since ? { since } : {}) });
-    if (isJson()) print({ schemaVersion: 1, conversations: summaries });
-    else if (!summaries.length) print("No conversations found.");
-    else print(summaries.map((item) => `${item.id}\t${item.updatedAt}\t${item.branches}\t${item.workspace}\t${item.title}`).join("\n"));
+    const discovered = await sourceAdapter(sourceName(options.source)).discoverWithOutcomes({ ...(options.workspace ? { workspace: options.workspace } : {}), ...(since ? { since } : {}) });
+    if (isJson()) print({ schemaVersion: 1, conversations: discovered.summaries, outcomes: discovered.outcomes });
+    else print([discovered.summaries.length ? discovered.summaries.map((item) => `${item.id}\t${item.updatedAt}\t${item.branches}\t${item.workspace}\t${item.title}`).join("\n") : "No conversations found.", discovered.outcomes.length ? `Source files needing attention:\n${formatOutcomes(discovered.outcomes)}` : ""].filter(Boolean).join("\n"));
   });
 
 program.command("show")
@@ -140,7 +160,7 @@ program.command("doctor")
     const staging = existsSync(paths.attachmentsDir) ? readdirSync(paths.attachmentsDir).filter((name) => name.startsWith(".t3-import-staging-")) : [];
     const sources: Record<string, unknown> = {};
     for (const name of ["codex", "claude"] as const) {
-      try { const items = await sourceAdapter(name).discover({}); sources[name] = { available: true, conversations: items.length, workspaces: new Set(items.map((item) => item.workspace)).size }; }
+      try { const discovered = await sourceAdapter(name).discoverWithOutcomes({}); const items = discovered.summaries; sources[name] = { available: true, conversations: items.length, workspaces: new Set(items.map((item) => item.workspace)).size, outcomes: discovered.outcomes }; }
       catch (error) { sources[name] = { available: false, error: error instanceof Error ? error.message : String(error) }; }
     }
     print({ schemaVersion: 1, target: paths, runtime, database, sources, indexedDbCaches: discoverT3CacheProfiles(), stagingDirectories: staging });
@@ -198,15 +218,24 @@ program.command("import")
     const source = sourceName(options.source);
     const adapter = sourceAdapter(source);
     const since = parseSince(options.since);
-    const summaries = await adapter.discover({ workspace: options.workspace, ...(since ? { since } : {}), ...(options.includeIncomplete !== undefined ? { includeIncomplete: options.includeIncomplete } : {}) });
-    const selected: SourceSummary[] = options.all ? summaries : options.thread.map((id) => {
+    const discovered = await adapter.discoverWithOutcomes({ workspace: options.workspace, ...(since ? { since } : {}), ...(options.includeIncomplete !== undefined ? { includeIncomplete: options.includeIncomplete } : {}) });
+    const summaries = discovered.summaries;
+    const missingSelections: SessionOutcomeRecord[] = [];
+    const selected: SourceSummary[] = options.all ? summaries : options.thread.flatMap((id) => {
       const summary = summaries.find((item) => item.id === id);
-      if (!summary) throw usageError(`Conversation not found in workspace: ${id}`);
-      return summary;
+      if (!summary) {
+        missingSelections.push(missingSourceSessionOutcome(source, id));
+        return [];
+      }
+      return [summary];
     });
-    const loaded = await Promise.all(selected.map(async (summary) => ({ conversation: await adapter.load(summary, { workspace: options.workspace!, ...(since ? { since } : {}), ...(options.includeIncomplete !== undefined ? { includeIncomplete: options.includeIncomplete } : {}) }), resume: options.resume })));
+    const loadResult = await loadSelected(adapter, selected, { workspace: options.workspace, ...(since ? { since } : {}), ...(options.includeIncomplete !== undefined ? { includeIncomplete: options.includeIncomplete } : {}) });
+    const loaded = loadResult.conversations.map((conversation) => ({ conversation, resume: options.resume }));
+    const outcomes = [...discovered.outcomes, ...missingSelections, ...loadResult.outcomes];
+    if (loaded.length === 0 && outcomes.length > 0) { reportNoLoadedSessions(paths, outcomes); return; }
     reportWriteTarget(paths, Boolean(options.dryRun));
     const result: ImportRunResult = await importConversations(loaded, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun), resume: options.resume });
+    result.outcomes = outcomes;
     await attachCacheReset(result, paths, result.results.some((item) => item.status === "imported"));
     print(result);
   });
@@ -240,15 +269,21 @@ program.command("replace")
     if (!options.dryRun && !options.yes && !await confirmReplace(options.thread.length, paths.dbPath)) return;
     const source = sourceName(options.source);
     const adapter = sourceAdapter(source);
-    const summaries = await adapter.discover({ workspace: options.workspace });
-    const selected = [...new Set(options.thread)].map((id) => {
+    const discovered = await adapter.discoverWithOutcomes({ workspace: options.workspace });
+    const missingSelections: SessionOutcomeRecord[] = [];
+    const selected = [...new Set(options.thread)].flatMap((id) => {
+      const summaries = discovered.summaries;
       const summary = summaries.find((item) => item.id === id);
-      if (!summary) throw usageError(`Conversation not found in workspace: ${id}`);
-      return summary;
+      if (!summary) { missingSelections.push(missingSourceSessionOutcome(source, id)); return []; }
+      return [summary];
     });
-    const loaded = await Promise.all(selected.map(async (summary) => ({ conversation: await adapter.load(summary, { workspace: options.workspace! }) })));
+    const loadResult = await loadSelected(adapter, selected, { workspace: options.workspace! });
+    const loaded = loadResult.conversations.map((conversation) => ({ conversation }));
+    const outcomes = [...discovered.outcomes, ...missingSelections, ...loadResult.outcomes];
+    if (loaded.length === 0 && outcomes.length > 0) { reportNoLoadedSessions(paths, outcomes); return; }
     reportWriteTarget(paths, Boolean(options.dryRun));
     const result = await replaceConversations(loaded, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun) });
+    result.outcomes = outcomes;
     await attachCacheReset(result, paths, result.results.some((item) => item.status === "replaced"));
     print(result);
     if (result.hasConflicts) process.exitCode = 7;
@@ -293,18 +328,23 @@ program.command("sync")
     const source = sourceName(options.source);
     const adapter = sourceAdapter(source);
     const since = parseSince(options.since);
-    const summaries = await adapter.discover({ workspace: options.workspace, ...(since ? { since } : {}) });
-    const selected = options.all ? summaries : options.thread.map((id) => {
-      const summary = summaries.find((item) => item.id === id);
-      if (!summary) throw usageError(`Conversation not found in workspace: ${id}`);
-      return summary;
+    const discovered = await adapter.discoverWithOutcomes({ workspace: options.workspace, ...(since ? { since } : {}) });
+    const missingSelections: SessionOutcomeRecord[] = [];
+    const selected = options.all ? discovered.summaries : options.thread.flatMap((id) => {
+      const summary = discovered.summaries.find((item) => item.id === id);
+      if (!summary) { missingSelections.push(missingSourceSessionOutcome(source, id)); return []; }
+      return [summary];
     });
-    const loaded = await Promise.all(selected.map(async (summary) => ({ conversation: await adapter.load(summary, { workspace: options.workspace! }) })));
+    const loadResult = await loadSelected(adapter, selected, { workspace: options.workspace! });
+    const loaded = loadResult.conversations.map((conversation) => ({ conversation }));
+    const outcomes = [...discovered.outcomes, ...missingSelections, ...loadResult.outcomes];
+    if (loaded.length === 0 && outcomes.length > 0) { reportNoLoadedSessions(paths, outcomes); return; }
     const eligible = options.all
       ? (await Promise.all(loaded.map(async (selection) => ({ selection, preview: await inspectConversationSync(selection.conversation, paths) })))).filter((item) => item.preview.previouslyImported).map((item) => item.selection)
       : loaded;
     reportWriteTarget(paths, Boolean(options.dryRun));
     const result = await syncConversations(eligible, paths, { ...globalOverrides(), dryRun: Boolean(options.dryRun) });
+    result.outcomes = outcomes;
     await attachCacheReset(result, paths, result.results.some((item) => item.status === "synced"));
     print(result);
     if (result.hasConflicts) process.exitCode = 7;

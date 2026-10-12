@@ -9,6 +9,7 @@ import type {
   ReplaceRunResult,
   ReplaceSelection,
   SourceName,
+  SessionOutcomeRecord,
   SourceSummary,
   SyncRunResult,
   SyncSelection,
@@ -23,6 +24,7 @@ import { inspectRuntime, type RuntimeState } from "./target/schema.js";
 import { launchT3Code } from "./target/launch.js";
 import { resetT3RebuildableCache } from "./target/cache.js";
 import { inspectConversationReplacement, replaceConversations } from "./target/replace.js";
+import { sourceLoadFailureOutcome } from "./sources/files.js";
 
 export type Screen = "preflight" | "blocked" | "source" | "workspace" | "provider" | "threads" | "review" | "running" | "result" | "launching" | "launch-error" | "error";
 
@@ -156,6 +158,8 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
   const [runtime, setRuntime] = useState<RuntimeState>();
   const [source, setSource] = useState<SourceName>(initialSource ?? "codex");
   const [summaries, setSummaries] = useState<SourceSummary[]>([]);
+  const [sourceOutcomes, setSourceOutcomes] = useState<SessionOutcomeRecord[]>([]);
+  const [discoveryLoaded, setDiscoveryLoaded] = useState(false);
   const [workspace, setWorkspace] = useState<string>();
   const [provider, setProvider] = useState<string | undefined>(initialProvider);
   const [index, setIndex] = useState(0);
@@ -258,8 +262,13 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
   useEffect(() => {
     if (screen !== "workspace") return;
     setIndex(0);
-    sourceAdapter(source).discover({}).then((items) => {
+    setDiscoveryLoaded(false);
+    setSourceOutcomes([]);
+    setSummaries([]);
+    sourceAdapter(source).discoverWithOutcomes({}).then(({ summaries: items, outcomes }) => {
+      setSourceOutcomes(outcomes);
       setSummaries(items);
+      setDiscoveryLoaded(true);
       const selectedWorkspace = initialWorkspace
         ? items.find((item) => item.workspace.toLowerCase() === initialWorkspace.toLowerCase())?.workspace
         : inferCurrentWorkspace(items);
@@ -301,8 +310,7 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
             ? { ...item, title: conversation.summary.title, updatedAt: conversation.summary.updatedAt, status: conversation.summary.status }
             : item));
         } catch {
-          // A failed row remains visible as unavailable; other conversations
-          // continue reconciling and can still be selected.
+          setSourceOutcomes((current) => [...current, sourceLoadFailureOutcome(summary)]);
         } finally {
           if (!cancelled) setPendingStatuses((count) => Math.max(0, count - 1));
         }
@@ -429,13 +437,14 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
       {screen === "preflight" && <Text>Checking whether T3 is running…</Text>}
       {screen === "blocked" && <><Text bold color="red">T3 is running</Text><Text>Close T3 before importing, syncing, or replacing{runtime?.pid ? ` (detected PID ${runtime.pid})` : ""}.</Text>{runtime?.origin ? <Text dimColor>Runtime: {runtime.origin}</Text> : null}<Text>Press r or Enter to check again, or q to quit.</Text></>}
       {screen === "source" && <><Text bold>Choose a source</Text><Menu items={["Codex", "Claude Code"]} index={index} /></>}
-      {screen === "workspace" && <><Text bold>Choose a workspace</Text>{summaries.length === 0 ? <Text>Discovering {source} conversations…</Text> : <Menu items={workspaces} index={index} />}</>}
+      {screen === "workspace" && <><Text bold>Choose a workspace</Text>{!discoveryLoaded ? <Text>Discovering {source} conversations…</Text> : summaries.length === 0 ? <Text>No {source} conversations found.</Text> : <Menu items={workspaces} index={index} />}{sourceOutcomes.length > 0 ? <Box flexDirection="column"><Text color="yellow">{sourceOutcomes.length} source outcome{sourceOutcomes.length === 1 ? "" : "s"} need attention:</Text>{sourceOutcomes.slice(0, 4).map((item) => <Text key={`workspace-outcome:${item.source}:${item.sessionId ?? item.displayName}`}>{item.outcome.kind} · {item.source} {item.sessionId ?? item.displayName}: {item.outcome.message}{item.sourcePath ? ` Path: ${item.sourcePath}` : ""} Next: {item.outcome.nextAction}</Text>)}{sourceOutcomes.length > 4 ? <Text dimColor>{sourceOutcomes.length - 4} more; use the CLI list command for all paths.</Text> : null}</Box> : null}</>}
       {screen === "provider" && <><Text bold>Choose a T3 provider instance</Text><Menu items={providers} index={index} /></>}
       {screen === "threads" && <>
         <Text bold>{mode === "sync" ? "Select conversations to sync" : mode === "replace" ? "Select conversations to replace" : "Select conversations"} — {workspace}</Text>
         {searching || query ? <Text color="yellow">Search: {query}<Text dimColor>_</Text></Text> : null}
         <Menu items={visibleThreads.map((item) => {
-          const syncText = conversationStatusText(syncPreviews.get(item.id), checkingStatuses);
+          const sourceOutcome = sourceOutcomes.find((outcome) => outcome.sessionId === item.id && outcome.outcome.phase === "load");
+          const syncText = sourceOutcome ? "unavailable · see recovery guidance" : conversationStatusText(syncPreviews.get(item.id), checkingStatuses);
           const replacement = replacePreviews.get(item.id);
           const status = mode === "replace"
             ? replacementStatusText(replacement, checkingStatuses)
@@ -446,6 +455,13 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
         })} index={index} selected={selectedVisible} disabled={disabledVisible} />
         {pendingStatuses > 0 ? <Text dimColor>Checking {pendingStatuses} conversation{pendingStatuses === 1 ? "" : "s"}…</Text> : null}
         {visibleThreads.length === 0 && <Text color="yellow">No matching conversations.</Text>}
+        {sourceOutcomes.length > 0 ? <Box marginTop={1} flexDirection="column">
+          <Text color="yellow">{sourceOutcomes.length} source outcome{sourceOutcomes.length === 1 ? "" : "s"} need attention:</Text>
+          {sourceOutcomes.slice(0, 5).map((item) => <Text key={`outcome:${item.source}:${item.sessionId ?? item.sourcePath ?? item.displayName}:${item.outcome.phase}`} dimColor>
+            {item.outcome.kind} · {item.source} {item.sessionId ?? item.displayName} · {item.outcome.message}{item.sourcePath ? ` Path: ${item.sourcePath}` : ""} Next: {item.outcome.nextAction}
+          </Text>)}
+          {sourceOutcomes.length > 5 ? <Text dimColor>{sourceOutcomes.length - 5} more; run `list --source {source}` for all paths and recovery steps.</Text> : null}
+        </Box> : null}
       </>}
       {screen === "review" && <>
         {preparedReplacements.length ? <>
@@ -464,14 +480,21 @@ export function ImportTui({ paths, initialSource, initialWorkspace, initialProvi
         </>}
       </>}
       {screen === "running" && <Text>Backing up and reconciling conversations…</Text>}
-      {screen === "result" && (result || syncResult || replaceResult) && <>
-        <Text bold color={result?.results.some((item) => item.status === "conflict") ? "yellow" : "green"}>{result?.results.some((item) => item.status === "conflict") ? "Completed with import conflicts" : "Complete"}</Text>
+      {screen === "result" && (result || syncResult || replaceResult || sourceOutcomes.length > 0) && <>
+        <Text bold color={result?.results.some((item) => item.status === "conflict") || sourceOutcomes.length > 0 ? "yellow" : "green"}>{result?.results.some((item) => item.status === "conflict") ? "Completed with import conflicts" : sourceOutcomes.length > 0 ? "Completed with source outcomes" : "Complete"}</Text>
         {result ? <Text>Import backup: {result.backup ?? "not needed"}</Text> : null}
         {result?.results.map((item) => <Text key={`import:${item.threadId}`}>{item.status === "imported" ? "✓" : item.status === "conflict" ? "!" : "•"} {item.title} — {item.status}, {item.turns} turns, {item.events} events{item.warnings[0] ? `; ${item.warnings[0]}` : ""}</Text>)}
         {syncResult ? <Text>Sync backup: {syncResult.backup ?? "not needed"}</Text> : null}
         {syncResult?.results.map((item) => <Text key={`sync:${item.sourceKey}`}>{item.status === "synced" ? "✓" : "•"} {item.title} — {item.status}, {item.turnsAdded} added, {item.turnsAdopted} adopted, {item.events} events</Text>)}
         {replaceResult ? <Text>Replacement backup: {replaceResult.backup ?? "not needed"}</Text> : null}
         {replaceResult?.results.map((item) => <Text key={`replace:${item.sourceKey}`}>{item.status === "replaced" ? "✓" : "•"} {item.title} — {item.status}{item.oldThreadId ? `, old ${item.oldThreadId}` : ""}{item.newThreadId ? `, new ${item.newThreadId}` : ""}, {item.turns} turns, {item.events} events</Text>)}
+        {sourceOutcomes.length > 0 ? <Box marginTop={1} flexDirection="column">
+          <Text color="yellow">Source outcomes needing attention: {sourceOutcomes.length}</Text>
+          {sourceOutcomes.slice(0, 8).map((item) => <Text key={`result-outcome:${item.source}:${item.sessionId ?? item.sourcePath ?? item.displayName}:${item.outcome.phase}`} dimColor>
+            {item.outcome.kind} · {item.source} {item.sessionId ?? item.displayName} · {item.outcome.message}{item.sourcePath ? ` Path: ${item.sourcePath}` : ""} Next: {item.outcome.nextAction}
+          </Text>)}
+          {sourceOutcomes.length > 8 ? <Text dimColor>{sourceOutcomes.length - 8} more; run `list --source {source}` for all paths and recovery steps.</Text> : null}
+        </Box> : null}
         {(replaceResult?.cache ?? syncResult?.cache ?? result?.cache) ? <Text>Cache backup: {(replaceResult?.cache ?? syncResult?.cache ?? result?.cache)?.backup ?? "cache not found"}</Text> : null}
         {cacheWarning ? <Text color="yellow">{cacheWarning}</Text> : null}
         <StartT3Prompt index={index} />

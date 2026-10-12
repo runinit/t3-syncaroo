@@ -117,7 +117,7 @@ export interface SessionOutcomeRecord {
   /** Present only when the session identifier was parsed from the source. */
   sessionId?: string;
   /** Local source locator for finding the affected file or folder. */
-  sourcePath: string;
+  sourcePath?: string;
   /** Short label for terminal summaries. */
   displayName: string;
   outcome: SessionOutcome;
@@ -221,6 +221,7 @@ export interface SyncRunResult {
   backup: string | null;
   cache?: CacheResetResult;
   results: SyncItemResult[];
+  outcomes?: SessionOutcomeRecord[];
   warnings: string[];
   hasConflicts: boolean;
 }
@@ -273,6 +274,7 @@ export interface ReplaceRunResult {
   backup: string | null;
   cache?: CacheResetResult;
   results: ReplaceItemResult[];
+  outcomes?: SessionOutcomeRecord[];
   warnings: string[];
   hasConflicts: boolean;
 }

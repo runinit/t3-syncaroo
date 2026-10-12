@@ -148,6 +148,29 @@ describe("interactive TUI", () => {
     tui.unmount();
   });
 
+  it("shows source discovery recovery guidance when there are no importable sessions", async () => {
+    const root = await mkdtemp(join(tmpdir(), "t3-import-tui-source-outcome-"));
+    const sessions = join(root, "sessions");
+    mkdirSync(sessions, { recursive: true });
+    writeFileSync(join(sessions, "unsupported.jsonl"), "not a Codex session\n");
+    const previousHome = process.env.CODEX_HOME;
+    const previousBin = process.env.CODEX_BIN;
+    process.env.CODEX_HOME = root;
+    process.env.CODEX_BIN = join(root, "missing-codex");
+    const tui = render(<ImportTui paths={paths} initialSource="codex" />);
+    try {
+      const frame = await waitForFrame(tui, "unsupported · codex unsupported.jsonl");
+      expect(frame).toContain("does not contain a supported Codex session header");
+      expect(frame).toContain("rediscover");
+    } finally {
+      tui.unmount();
+      if (previousHome === undefined) delete process.env.CODEX_HOME;
+      else process.env.CODEX_HOME = previousHome;
+      if (previousBin === undefined) delete process.env.CODEX_BIN;
+      else process.env.CODEX_BIN = previousBin;
+    }
+  });
+
   it("blocks at startup while the target T3 runtime is live", async () => {
     const root = await mkdtemp(join(tmpdir(), "t3-import-tui-live-"));
     const stateDir = join(root, "userdata");

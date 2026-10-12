@@ -73,6 +73,21 @@ export function sourceLoadFailureOutcome(summary: SourceSummary): SessionOutcome
   return { source: summary.source, sessionId: summary.id, sourcePath: summary.path, displayName: basename(summary.path), outcome };
 }
 
+export function missingSourceSessionOutcome(source: SourceName, sessionId: string): SessionOutcomeRecord {
+  return {
+    source,
+    sessionId,
+    displayName: sessionId,
+    outcome: {
+      kind: "failed",
+      phase: "discovery",
+      code: "source-session-not-found",
+      message: "The requested session was not found among the discovered source files for this selection.",
+      nextAction: "Check the session ID and workspace filters, then rediscover before retrying.",
+    },
+  };
+}
+
 export async function walkFilesWithFailures(root: string, extension: string): Promise<FileWalkResult> {
   const output: string[] = [];
   const failures: FileWalkFailure[] = [];
