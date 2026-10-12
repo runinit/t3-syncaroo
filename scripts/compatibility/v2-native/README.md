@@ -29,6 +29,13 @@ database with the fixture runner, then runs the packed helper with `NODE_PATH`
 empty. The helper has no runtime npm dependencies; its traced runtime externals
 are Node built-ins, including `node:sqlite`.
 
+esbuild includes generated source-path comments and CommonJS module IDs in its
+output. Building from a differently nested checkout may therefore change the
+candidate helper's raw SHA-256 even when the pinned source closure and bundled
+dependencies are unchanged. The shipped `vendor/t3-v2-native-helper.mjs` hash
+is the one recorded in the checked-in manifest and provenance; do not replace
+it based only on a path-sensitive local candidate hash.
+
 `LICENSES.md` and `vendor-manifest.json` are generated alongside this source.
 The manifest records the pinned source and lockfile hashes, helper hash, traced
 T3 source files, each dependency's exact pnpm-lock integrity, license metadata,
