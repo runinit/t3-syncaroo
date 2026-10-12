@@ -31,6 +31,7 @@ import {
   type PlannedThread,
 } from "./importer.js";
 import { bootstrapCheckpoint, createEvent, existingProvider, findRecord, readEvents, targetId } from "./sync.js";
+import { inspectNightlyV2Replacement, replaceNightlyV2 } from "./v2/replace.js";
 
 export interface ReplaceOptions extends TargetOverrides {
   dryRun: boolean;
@@ -59,7 +60,7 @@ interface ReplacePlan {
 }
 
 const conflictStatuses = new Set<ReplaceItemResult["status"]>([
-  "not-imported", "active-source", "branch-replace-unsupported", "target-missing",
+  "not-imported", "active-source", "branch-replace-unsupported", "target-missing", "history-conflict",
 ]);
 
 export function replacementThreadId(sourceKey: string, oldThreadId: string): string {
@@ -218,7 +219,8 @@ function aggregate(results: ReplaceItemResult[], dryRun: boolean): ReplaceRunRes
 export async function inspectConversationReplacement(conversation: CanonicalConversation, paths: TargetPaths): Promise<ConversationReplacePreview> {
   const db = new Database(paths.dbPath, { readonly: true, fileMustExist: true });
   try {
-    validateTargetDatabase(db);
+    const schema = validateTargetDatabase(db);
+    if (schema.profile === "nightly-v2") return await inspectNightlyV2Replacement(conversation, paths);
     const plan = buildPlan(db, paths, conversation, false);
     const status: ConversationReplacePreview["status"] = plan.result.status === "replaced" ? "replaceable" : plan.result.status as ConversationReplacePreview["status"];
     return {
@@ -242,6 +244,9 @@ export async function replaceConversations(selections: ReplaceSelection[], paths
   const warnings: string[] = [];
   try {
     const schema = validateTargetDatabase(db);
+    if (schema.profile === "nightly-v2") {
+      return await replaceNightlyV2(selections, paths, options, db);
+    }
     const plans = selections.map((selection) => buildPlan(db, paths, selection.conversation, options.dryRun));
     const writable = plans.filter((plan) => plan.planned && plan.deletions?.length && plan.oldRecord && plan.oldRecords?.length);
     if (writable.length > 0) {

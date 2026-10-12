@@ -244,6 +244,7 @@ export type ReplaceItemStatus =
   | "active-source"
   | "branch-replace-unsupported"
   | "target-missing"
+  | "history-conflict"
   | "dry-run";
 
 export interface ReplaceItemResult {
