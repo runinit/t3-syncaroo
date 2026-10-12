@@ -1,8 +1,8 @@
 {
-  "t3SourceCommit": "ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e",
-  "t3ReleaseArchiveSha256": "88914520008d33477f78b15f86346958c4422bc5806effa76761f97344fd2e65",
-  "t3PnpmLockSha256": "7ad8c525839cbb18b3d376a7fa7bddd9a9ba5deaba7d4cf8efb79daa5b890833",
-  "bundledHelperSha256": "e3d315f34243a52c1e501253840160a777ad67f93d5c7665beaf57819de06988",
+  "t3SourceCommit": "d07a07f33c0a1b317dea6234636976231c3688b5",
+  "t3ReleaseArchiveSha256": "adb3a2523804bb9a017b04fb12af9e6da8d81d58c10d830240a6b4db71e11bf8",
+  "t3PnpmLockSha256": "1b88a17d597de5166053964e109bd42640c880bd43f4ba8013f6d09b178646cd",
+  "bundledHelperSha256": "da24f06b22f2c7c598898d07866f3fd64619d15d145b9d1ee465ba3a9dfd0d63",
   "esbuildVersion": "0.25.12",
   "esbuildTarballIntegrities": [
     {
@@ -134,13 +134,13 @@
     "packages/shared/src/threadSearch.ts",
     "packages/shared/src/toolOutput.ts"
   ],
-  "bundledDependencyCount": 94,
+  "bundledDependencyCount": 93,
   "bundledDependencyLicenses": [
     {
       "name": "@ungap/structured-clone",
-      "version": "1.4.0",
+      "version": "1.3.1",
       "license": "ISC",
-      "pnpmIntegrity": "sha512-1mEZtMKPM09vDmQt5y7YvmN2+DFTP7Tg0EWXdic8/C6VRnpb33e4ghisCIE3WZjsE2N8mf+QV1Zqh7ZFYLWInQ==",
+      "pnpmIntegrity": "sha512-mUFwbeTqrVgDQxFveS+df2yfap6iuP20NAKAsBt5jDEoOTDew+zwLAOilHCeQJOVSvmgCX4ogqIrA0mnyr08yQ==",
       "licenseFiles": [
         {
           "file": "LICENSE",
@@ -486,9 +486,9 @@
     },
     {
       "name": "mdast-util-find-and-replace",
-      "version": "3.0.3",
+      "version": "3.0.2",
       "license": "MIT",
-      "pnpmIntegrity": "sha512-xPgpDNl0/OXHsI7TlaIs22lWnH3KlpvZdXG1ET/m/YT2Hhdkx8lJV4kLphE6l9simyM4KPDFBwas08BgEob6Jw==",
+      "pnpmIntegrity": "sha512-Tmd1Vg/m3Xz43afeNxDIhWRtFZgM2VLyaf4vSTYwudTyeuTneoL3qtWMA5jeLyz/O1vDJmmV4QuScFCA2tBPwg==",
       "licenseFiles": [
         {
           "file": "license",
@@ -498,9 +498,9 @@
     },
     {
       "name": "mdast-util-from-markdown",
-      "version": "2.1.0",
+      "version": "2.0.3",
       "license": "MIT",
-      "pnpmIntegrity": "sha512-KRLgmPaP2H1ul2bpoJkOS+9pAcDAAj9Nu1mqLnh8NLeJG5tlvj42TH80PIGBpROWlRXLk0lDrWNuZCFy/tsB4A==",
+      "pnpmIntegrity": "sha512-W4mAWTvSlKvf8L6J+VN9yLSqQ9AOAAvHuoDAmPkz4dHf553m5gVj2ejadHJhoJmcmxEnOv6Pa8XJhpxE93kb8Q==",
       "licenseFiles": [
         {
           "file": "license",
@@ -546,13 +546,13 @@
     },
     {
       "name": "mdast-util-gfm-strikethrough",
-      "version": "2.0.1",
+      "version": "2.0.0",
       "license": "MIT",
-      "pnpmIntegrity": "sha512-OuJHqvr455pwu2OaOrir7dbzqs4jlWKOtlu9L6GjcIjjQwNyw02VntQsr/Ek6/A13vgnXfUhBekWRUP1OkNivw==",
+      "pnpmIntegrity": "sha512-mKKb915TF+OC5ptj5bJ7WFRPdYtuHv0yTRxK2tJvi+BDqbkiG7h7u/9SI89nRAYcmap2xHQL9D+QG/6wSrTtXg==",
       "licenseFiles": [
         {
           "file": "license",
-          "sha256": "ea559213e0e927a249bd60f4f6a27d1a272fb5d38d2babbd723099c66a17c5af"
+          "sha256": "0e99f2710dd25758c759e0578c135dfebc0cf8abb3f5f2b9ae7bec06912b44aa"
         }
       ]
     },
@@ -618,9 +618,9 @@
     },
     {
       "name": "mdast-util-to-markdown",
-      "version": "2.2.0",
+      "version": "2.1.2",
       "license": "MIT",
-      "pnpmIntegrity": "sha512-2Jn/ADrHFFyyniBMi0bncTbJqU78K3/TEYvzvwrWWzD9MYPUa/Gm4r3nOeKFQg/PDM5BsbDYdc8ackW4NTY6NA==",
+      "pnpmIntegrity": "sha512-xj68wMTvGXVOKonmog6LwyJKrYXZPvlwabaryTjLh9LuvovB/KAH+kvi8Gjj+7rJjsFi23nkUxRQv1KqSroMqA==",
       "licenseFiles": [
         {
           "file": "license",
@@ -642,9 +642,9 @@
     },
     {
       "name": "micromark",
-      "version": "4.0.3",
+      "version": "4.0.2",
       "license": "MIT",
-      "pnpmIntegrity": "sha512-oGYfQzHSG5dOMovQcJ3fyTmZlWAWpi0XA0sJwJs+i6OT88o1+Jtw/8z0CmdowSLxGhhFK89rQ/oXph/wN02PNw==",
+      "pnpmIntegrity": "sha512-zpe98Q6kvavpCr1NPVSCMebCKfD7CA2NqZ+rykeNhONIJBpc1tFKt9hucLGwha3jNTNI8lHpctWJWoimVF4PfA==",
       "licenseFiles": [
         {
           "file": "license",
@@ -654,9 +654,9 @@
     },
     {
       "name": "micromark-core-commonmark",
-      "version": "2.0.4",
+      "version": "2.0.3",
       "license": "MIT",
-      "pnpmIntegrity": "sha512-wxEeE8v8XVvOrxn1TZj74qYhAtTQsSqufHVS3uNVyT1MupXxhyaHk8/9xDNPh9BmL77QNDgWTkZ3RsYHB2ry7w==",
+      "pnpmIntegrity": "sha512-RDBrHEMSxVFLg6xvnXmb1Ayr2WzLAWjeSATAoxwKYJV94TeNavgoIdA0a9ytzDSVzBy2YKFK+emCPOEibLeCrg==",
       "licenseFiles": [
         {
           "file": "license",
@@ -726,9 +726,9 @@
     },
     {
       "name": "micromark-extension-gfm-table",
-      "version": "2.1.2",
+      "version": "2.1.1",
       "license": "MIT",
-      "pnpmIntegrity": "sha512-pRzm4kDTu0MjlmBkxmS9yYhw60nncfcEwu9NNdPFSQEFXS95ZKyIIyTSHu/o3ReBUrLKYEq+7YaXCRn/bPB4MA==",
+      "pnpmIntegrity": "sha512-t2OU/dXXioARrC6yWfJ4hqB7rct14e8f7m0cbI5hUmDyyIlwv5vEtooptH8INkbLzOatzKuVbQmAYcbWoyz6Dg==",
       "licenseFiles": [
         {
           "file": "license",
@@ -786,9 +786,9 @@
     },
     {
       "name": "micromark-factory-space",
-      "version": "2.1.0",
+      "version": "2.0.1",
       "license": "MIT",
-      "pnpmIntegrity": "sha512-fS8hnLIjnjvdQIj39Geug8wWsR0HrYZ43KShKxNfwT7t2LOHo/LbWZEzEaSOjwtjdCsjoE6syHhonEzW0zv0+Q==",
+      "pnpmIntegrity": "sha512-zRkxjtBxxLd2Sc0d+fbnEunsTj46SWXgXciZmHq0kDYGnck/ZSGj9/wULTV95uoeYiK5hRXP2mJ98Uo4cq/LQg==",
       "licenseFiles": [
         {
           "file": "license",
@@ -885,18 +885,6 @@
       "version": "2.0.1",
       "license": "MIT",
       "pnpmIntegrity": "sha512-nDV/77Fj6eH1ynwscYTOsbK7rR//Uj0bZXBwJZRfaLEJ1iGBR6kIfNmlNqaqJf649EP0F3NWNdeJi03elllNUQ==",
-      "licenseFiles": [
-        {
-          "file": "license",
-          "sha256": "ea559213e0e927a249bd60f4f6a27d1a272fb5d38d2babbd723099c66a17c5af"
-        }
-      ]
-    },
-    {
-      "name": "micromark-util-edit-map",
-      "version": "1.0.0",
-      "license": "MIT",
-      "pnpmIntegrity": "sha512-Pa2ljlsEL6sVwFaYeyrOLSYbQt73JvGbPOYFq+9AElXiSnfI5Q4465RRZ1sHv7lDjDOnGRDDaqPXqClqWK/q1Q==",
       "licenseFiles": [
         {
           "file": "license",
