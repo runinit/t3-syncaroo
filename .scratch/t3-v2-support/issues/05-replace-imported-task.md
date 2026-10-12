@@ -6,7 +6,7 @@
 
 **References:** [Support spec](../../../docs/t3-v2-support-spec.md) · [Research](../../../docs/t3-v2-support-research.md) · [Design](../../../docs/t3-v2-native-design.md) · [Completed writer proof](../../../docs/t3-v2-proof.md) (evidence, not a ticket).
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] Replacement creates a complete task and retires the old imported task without leaving two synchronization owners.
 - [ ] Eligible source-session and Claude branch-head identity transfer to the replacement; T3 continuation targets the replacement.

@@ -6,7 +6,7 @@
 
 **References:** [Support spec](../../../docs/t3-v2-support-spec.md) · [Research](../../../docs/t3-v2-support-research.md) · [Design](../../../docs/t3-v2-native-design.md) · [Completed writer proof](../../../docs/t3-v2-proof.md) (evidence, not a ticket).
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] A converted task with intact source mapping is matched by deterministic identity, project ownership, and canonical history, not title alone.
 - [ ] A missing importer ledger can be recovered conservatively from v2 projections and source evidence without replaying native events.

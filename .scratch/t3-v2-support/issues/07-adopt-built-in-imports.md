@@ -6,7 +6,7 @@
 
 **References:** [Support spec](../../../docs/t3-v2-support-spec.md) · [Research](../../../docs/t3-v2-support-research.md) · [Design](../../../docs/t3-v2-native-design.md) · [Completed writer proof](../../../docs/t3-v2-proof.md) (evidence, not a ticket).
 
-**Status:** ready-for-agent
+**Status:** in-progress
 
 - [ ] The deterministic built-in thread identity, project, provider, source session, and full supported canonical history are verified before adoption.
 - [ ] An exact match gains t3-import synchronization and replacement ownership without creating another task; eligible source-session continuation remains attached to the adopted task.
