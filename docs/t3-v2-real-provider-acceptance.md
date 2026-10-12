@@ -94,6 +94,18 @@ After both T3 runs settled, I stopped the exact owned server and invoked public
 These outcomes are useful regressions to preserve. They do not satisfy the
 ticket 04 or 09 sync acceptance criteria.
 
+### Codex source re-read after the parser fix
+
+After the Codex `manual_context` handoff parser fix was merged into the shared
+integration branch at `dae4d9f`, I reran only the read-only public CLI `show`
+operation against the same isolated Codex rollout. It now reports source
+`status: complete`, with two turns, four messages, no warnings, and the real
+T3-created continuation included. No provider was invoked. This confirms the
+phantom incomplete turn is fixed at source loading; the original sync run above
+predates that fix. The final sync check still needs to be rerun with the merged
+Claude ledger-head and native continuation/adoption work; that work was not
+complete at the time of this retest.
+
 ## Disabled provider guard
 
 I disabled only the isolated `codex` provider instance by authenticated native
