@@ -146,6 +146,15 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 import",
     const rejected = await syncConversations([{ conversation: ambiguous }], paths, { dryRun: false });
     expect(rejected.results[0]!.status).toBe("branch-sync-unsupported");
     expect(eventCount(dbPath)).toBe(beforeAmbiguousSync);
+
+    const untrusted = structuredClone(advancedConversation);
+    untrusted.threads.forEach((candidate) => { candidate.currentBranch = false; });
+    untrusted.threads[0]!.warnings = ["The source current leaf is not uniquely identified."];
+    untrusted.threads[0]!.turns[0]!.assistant[0]!.text = "Changed ambiguous history";
+    const untrustedResult = await syncConversations([{ conversation: untrusted }], paths, { dryRun: false });
+    expect(untrustedResult.results[0]!.status).toBe("branch-sync-unsupported");
+    expect(untrustedResult.results[0]!.warnings).toContain("The source current leaf is not uniquely identified.");
+    expect(eventCount(dbPath)).toBe(beforeAmbiguousSync);
   });
 
   it("reports edited or deleted imported source history without modifying the native task", async () => {

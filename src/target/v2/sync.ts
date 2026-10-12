@@ -155,6 +155,11 @@ async function buildV2Plan(conversation: CanonicalConversation, paths: TargetPat
   const thread = { ...source, turns, ignoredInProgressTurns: source.ignoredInProgressTurns ?? source.turns.filter((turn) => !isTerminalTurn(turn)).length };
   const record = sourceRecord(paths, thread);
   if (!record) return { conversation, thread, status: "not-imported", added: [], adopted: 0, warnings: ["Conversation has not been imported into this T3 database or its source mapping is ambiguous."], resumable: false };
+  if (thread.source === "claude" && conversation.summary.branches > 1
+    && conversation.threads.filter((candidate) => candidate.currentBranch).length !== 1) {
+    return { conversation, thread, record, status: "branch-sync-unsupported", added: [], adopted: 0,
+      warnings: [...thread.warnings, "Claude synchronization requires one source-selected branch leaf; the current branch is ambiguous."], resumable: record.resumable };
+  }
   const target = await inspectV2(paths, record.threadId);
   if (!target?.exists || !target.records?.thread) return { conversation, thread, record, ...(target ? { target } : {}), status: "target-missing", added: [], adopted: 0, warnings: ["The imported T3 task no longer exists; synchronization left it unchanged."], resumable: record.resumable };
   const projected = target.records.thread;
@@ -179,10 +184,6 @@ async function buildV2Plan(conversation: CanonicalConversation, paths: TargetPat
     if (!headId || !expectedHeads.has(headId)) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["The Claude conversation head no longer matches the imported branch; synchronization left it unchanged."], resumable: record.resumable };
   } else if (oldHead !== null) {
     return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["The imported provider binding contains an unexpected conversation head; synchronization left it unchanged."], resumable: record.resumable };
-  }
-  if (thread.source === "claude" && conversation.summary.branches > 1
-    && conversation.threads.filter((candidate) => candidate.currentBranch).length !== 1) {
-    return { conversation, thread, record, target, status: "branch-sync-unsupported", added: [], adopted: 0, warnings: ["Claude synchronization requires one source-selected branch leaf; the current branch is ambiguous."], resumable: record.resumable };
   }
   const checkpointLength = checkpointPrefix(thread, record.checkpoint);
   if (checkpointLength === undefined) return { conversation, thread, record, target, status: "history-diverged", added: [], adopted: 0, warnings: ["Previously imported source history was edited or deleted; synchronization left the T3 task unchanged."], resumable: record.resumable };
