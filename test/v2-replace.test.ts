@@ -71,7 +71,7 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 replacem
     writableLedger.exec("DROP TRIGGER reject_replacement_ledger;");
     writableLedger.close();
     const retry = await replaceConversations([{ conversation }], paths, { dryRun: false });
-    expect(retry).toMatchObject({ status: "already-current", backup: null });
+    expect(retry).toMatchObject({ status: "already-current", backup: first.backup });
     expect(eventCount(paths.dbPath)).toBe(committedEvents);
     const recovered = new Database(ledgerPath, { readonly: true });
     expect(recovered.prepare("SELECT thread_id threadId, is_canonical canonical FROM imports ORDER BY imported_at DESC LIMIT 1").get())

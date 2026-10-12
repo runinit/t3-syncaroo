@@ -465,7 +465,7 @@ export interface V2NativeReply {
   projectionMetadata?: { schemaVersion: number; lastSequence: number } | null;
   threads?: V2ThreadReply[];
   projects?: Array<{ id?: string; projectId?: string; workspaceRoot?: string; deletedAt?: string | null; [key: string]: unknown }>;
-  outcome?: "written" | "already-present" | "write-failed" | "replaced" | "already-replaced" | "replace-conflict" | "readback-conflict";
+  outcome?: "written" | "already-present" | "write-failed" | "replaced" | "already-replaced" | "replace-conflict" | "readback-conflict" | "attached" | "already-attached";
   reason?: string;
   replacementThreadId?: string;
   storedSequences?: Array<{ eventId: string; threadId: string; sequence: number }>;
