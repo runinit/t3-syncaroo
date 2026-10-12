@@ -108,15 +108,17 @@ describe.skipIf(!fixture || !existsSync(fixture))("pinned T3 nightly v2 replacem
   it("cleans staged assets after a native sink failure only when readback proves no commit", async () => {
     const { root, paths, conversation } = await setup("t3-v2-replace-sink-failure-");
     conversation.threads[0]!.turns[0]!.assistant[0]!.text = "Changed before native sink failure";
+    const imageBytes = Buffer.from("synthetic replacement image");
     conversation.threads[0]!.turns[0]!.user.attachments.push({
-      sourceId: "staged-v2-replacement-image", name: "staged.png", mimeType: "image/png", sizeBytes: 12,
-      data: Buffer.from("synthetic replacement image"),
+      sourceId: "staged-v2-replacement-image", name: "staged.png", mimeType: "image/png", sizeBytes: imageBytes.byteLength,
+      data: imageBytes,
     });
     const before = eventCount(paths.dbPath);
     const db = new Database(paths.dbPath);
     db.exec("CREATE TRIGGER reject_replacement_thread BEFORE INSERT ON orchestration_events WHEN NEW.event_type = 'thread.created' BEGIN SELECT RAISE(ABORT, 'injected native sink failure'); END;");
     db.close();
-    await expect(replaceConversations([{ conversation }], paths, { dryRun: false })).rejects.toMatchObject({ exitCode: 6 });
+    await expect(replaceConversations([{ conversation }], paths, { dryRun: false }))
+      .rejects.toThrow(/Failed to write \d+ orchestration V2 event/u);
     expect(eventCount(paths.dbPath)).toBe(before);
     expect(readdirSync(join(root, "userdata", "attachments"))).toEqual([]);
   });
