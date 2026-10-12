@@ -1,9 +1,10 @@
 # Pinned T3 v2 native helper packaging proof
 
 This is a bounded packaging experiment for T3 Code source commit
-`ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e`. It demonstrates the native
-EventSinkV2 persistence seam from an npm-packed, unpacked candidate helper. It
-does not integrate the helper into t3-import's production package or CLI.
+`d07a07f33c0a1b317dea6234636976231c3688b5`. The generated helper is vendored
+and used by t3-import's nightly-v2 import, synchronization, and replacement
+paths. It demonstrates the native EventSinkV2 persistence seam from an
+npm-packed, unpacked helper.
 
 ## Reproduce
 
@@ -99,6 +100,23 @@ checks event payload thread IDs, and restricts the optional project command to
 a new `project.create` / `project.created` pair. Project preflight includes
 deleted rows so a tombstoned project ID is not reused.
 
+The `replace` operation atomically creates one complete replacement thread and
+tombstones every verified old thread in one `EventSinkV2.write` batch. It
+preflights exact old project/provider/binding identities, idle orchestration
+state, runtime ownership, event IDs, and globally unique T3-local provider
+thread IDs inside the same immediate transaction. A replacement retry succeeds
+only when the committed replacement events and retired-thread tombstones match
+the request. Each old tombstone must preserve the current persisted thread
+payload, allowing only deletion time, update time, and clearing title
+regeneration.
+
+The distinct `attach-upgraded-binding` operation attaches one source-derived
+provider binding to a live, unbound `v1_import` shell. It requires the caller's
+full inspected shell/history snapshot, empty provider-thread/turn records, and
+an unchanged snapshot inside the immediate transaction. It appends only one
+`provider-thread.updated` event and returns a structured idempotent retry
+result. It never infers provider IDs from conversation text.
+
 The stdin protocol acceptance test runs against the unpacked candidate. It
 writes and reads back a representative thread, message, turn item, and native
 provider-thread binding; verifies exact event ID/sequence ownership and
@@ -109,14 +127,17 @@ append rollback under a test-only SQLite projection trigger. A competing-writer
 case races two append requests from the same head and requires one append plus
 one structured contention conflict, with no failed or partial batch. It also tests project
 compensation for failed initial writes and verifies deleted-project
-non-resurrection. The trigger is fault injection only; persistence and
-projections use the pinned T3 implementation.
+non-resurrection. Replacement cases verify atomic create/tombstone batches,
+retries, foreign provider envelopes, and altered title/model/branch/lineage
+payloads. Binding-attach cases verify history snapshot CAS, retry, and global
+provider-thread-ID collision handling. The trigger is fault injection only;
+persistence and projections use the pinned T3 implementation.
 
-Most recent candidate: 3,000,715 bytes unpacked and 577,276-byte npm tarball,
-115 pinned T3 source files, and 94 bundled dependencies. All 94 have nonempty
-license texts (92 MIT, 1 ISC, 1 BSD-2-Clause); the helper's external runtime
+Most recent candidate: 3,027,789 bytes unpacked and 581,034-byte npm tarball,
+115 pinned T3 source files, and 93 bundled dependencies. All 93 have nonempty
+license texts (91 MIT, 1 ISC, 1 BSD-2-Clause); the helper's external runtime
 imports are Node built-ins only. The migration runner is separate from the
-candidate helper. The packed-consumer positional and stdin protocol tests pass
-on Node 22.16.0 and Node 26.11.1. The repository's real `npm pack` path and its
-final installed dependency graph have not been tested. This proof is not
-sufficient by itself to claim product support.
+candidate helper. The packed candidate's stdin protocol passes on Node 22.16.0
+and Node 26.11.1. The clean npm-packed consumer passes on Node 26.11.1. Running
+the CLI consumer on Node 22.16.0 currently requires a Node-22-built
+`better-sqlite3` native addon; reusing the Node-26 addon fails its ABI check.

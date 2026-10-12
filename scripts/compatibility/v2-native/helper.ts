@@ -336,6 +336,14 @@ async function appendRequest(request: any) {
 
 const activeRunStatuses = new Set(['preparing', 'queued', 'starting', 'running', 'waiting']);
 const activeRequestStatuses = new Set(['pending', 'queued', 'running', 'waiting']);
+const threadPayloadFields = new Set([
+  'id', 'projectId', 'title', 'createdBy', 'creationSource', 'providerInstanceId', 'modelSelection', 'runtimeMode',
+  'interactionMode', 'branch', 'worktreePath', 'linkedPullRequest', 'pullRequests', 'branchPullRequest',
+  'activeProviderThreadId', 'historyOrigin', 'lineage', 'forkedFrom', 'createdAt', 'updatedAt', 'archivedAt',
+  'settledOverride', 'settledAt', 'unsettledAt', 'snoozedUntil', 'snoozedAt', 'lastSnoozeWakeAt', 'limitRecovery',
+  'pinnedAt', 'autoSettleDisabledAt', 'pinOrderKey', 'activeOrderKey', 'lastVisitedAt', 'titleRegeneration',
+  'rollbackRequestId', 'rollbackFailure', 'deletedAt',
+]);
 
 function attachConflict(reason: string, error: string) {
   return { ok: false, outcome: 'attach-conflict', reason, error };
@@ -506,9 +514,10 @@ async function replaceRequest(request: any) {
     || oldThreadIds.some((id) => !deleteEvents.some((event: any) => event.threadId === id))) {
     return replaceConflict('invalid-event-set', 'replace requires one replacement thread and one tombstone for every old thread');
   }
-  if (deleteEvents.some((event: any) => event.payload.projectId !== request.projectId
+  if (deleteEvents.some((event: any) => event.providerInstanceId !== request.providerInstanceId
+    || event.payload.projectId !== request.projectId
     || event.payload.providerInstanceId !== request.providerInstanceId)) {
-    return replaceConflict('event-identity-mismatch', 'every retired thread shell must belong to the requested project and provider instance');
+    return replaceConflict('event-identity-mismatch', 'every retired thread envelope and shell must belong to the requested project and provider instance');
   }
   const replacementEvents = events.filter((event: any) => event.threadId === replacementId);
   const tombstonesValid = deleteEvents.every((event: any) => event.payload.id === event.threadId
@@ -588,6 +597,15 @@ async function replaceRequest(request: any) {
           if (shell.projectId !== request.projectId || shell.providerInstanceId !== request.providerInstanceId
             || shell.activeProviderThreadId !== expectedOldBinding.providerThreadId) {
             return replaceConflict('old-thread-identity-conflict', `old thread identity does not match the replacement owner: ${rawId}`);
+          }
+          const tombstone = deleteEvents.find((event: any) => event.threadId === rawId);
+          const expectedTombstone = Object.fromEntries(Object.entries(shell)
+            .filter(([key]) => threadPayloadFields.has(key)));
+          expectedTombstone.deletedAt = tombstone?.occurredAt;
+          expectedTombstone.titleRegeneration = null;
+          expectedTombstone.updatedAt = tombstone?.occurredAt;
+          if (!tombstone || canonicalJson(tombstone.payload) !== canonicalJson(expectedTombstone)) {
+            return replaceConflict('old-thread-payload-conflict', `retired thread tombstone does not preserve the current native shell: ${rawId}`);
           }
           const snapshot = yield* projections.getThreadSnapshot(oldId);
           const state: any = snapshot.projection;

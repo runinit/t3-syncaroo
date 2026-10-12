@@ -366,10 +366,35 @@ const replaceRequest = (targetDb = dbPath, eventsToReplace = replacementEvents, 
   transferRuntimeFromThreadId: threadId, replacementProviderThreadId, driver: 'codex', nativeThreadRef: nativeRef,
   expectedConversationHeadRef: null, events: eventsToReplace, ...overrides,
 });
+const replacementEventsForCurrentShell = (targetDb) => {
+  const current = run(nodePath, [helperPath], JSON.stringify(request(targetDb, 'inspect', { threadIds: [threadId] }))).threads[0].thread;
+  const events = structuredClone(replacementEvents);
+  events.at(-1).payload = { ...current, deletedAt: updatedTime, titleRegeneration: null, updatedAt: updatedTime };
+  return events;
+};
+const rejectsReplacementBeforeWrite = (name, mutate) => {
+  const targetDb = join(base, name, 'statev2.sqlite');
+  run(nodePath, [fixturePath, targetDb]);
+  run(nodePath, [helperPath], JSON.stringify(request(targetDb, 'write', { projectEvent, events })));
+  const changed = replacementEventsForCurrentShell(targetDb);
+  mutate(changed.at(-1));
+  const rejected = run(nodePath, [helperPath], JSON.stringify(replaceRequest(targetDb, changed)));
+  assert.equal(rejected.ok, false, `${name} must be rejected`);
+  assert.equal(rejected.outcome, 'replace-conflict', `${name} must return a structured conflict`);
+  const state = run(nodePath, [helperPath], JSON.stringify(request(targetDb, 'inspect', { threadIds: [threadId, replacementThreadId] })));
+  assert.equal(state.threads.find((entry) => entry.threadId === threadId).thread.deletedAt, null, `${name} must retain old shell`);
+  assert.equal(state.threads.find((entry) => entry.threadId === replacementThreadId).exists, false, `${name} must not create replacement`);
+};
+rejectsReplacementBeforeWrite('replace-foreign-delete-envelope', (event) => { event.providerInstanceId = 'foreign-provider-instance'; });
+rejectsReplacementBeforeWrite('replace-changed-title', (event) => { event.payload.title = 'Unrelated native title'; });
+rejectsReplacementBeforeWrite('replace-changed-model', (event) => { event.payload.modelSelection = { ...event.payload.modelSelection, model: 'foreign-model' }; });
+rejectsReplacementBeforeWrite('replace-changed-branch', (event) => { event.payload.branch = 'foreign-branch'; });
+rejectsReplacementBeforeWrite('replace-changed-lineage', (event) => { event.payload.lineage = { ...event.payload.lineage, rootThreadId: 'foreign-root' }; });
 const replacementDb = join(base, 'replace-happy-path', 'statev2.sqlite');
 run(nodePath, [fixturePath, replacementDb]);
 run(nodePath, [helperPath], JSON.stringify(request(replacementDb, 'write', { projectEvent, events })));
-const replaced = run(nodePath, [helperPath], JSON.stringify(replaceRequest(replacementDb)));
+const validReplacementEvents = replacementEventsForCurrentShell(replacementDb);
+const replaced = run(nodePath, [helperPath], JSON.stringify(replaceRequest(replacementDb, validReplacementEvents)));
 assert.equal(replaced.ok, true, JSON.stringify(replaced)); assert.equal(replaced.outcome, 'replaced');
 assert.equal(replaced.replacementThreadId, replacementThreadId);
 assert.equal(replaced.storedSequenceRange.last - replaced.storedSequenceRange.first, replacementEvents.length - 1);
@@ -383,7 +408,7 @@ assert.equal(afterReplace.threads.find((entry) => entry.threadId === threadId).e
   't3-import:v2-protocol:retire-old-thread');
 assert.equal(afterReplace.threads.find((entry) => entry.threadId === replacementThreadId).exists, true);
 const countAfterReplace = afterReplace.threads.flatMap((entry) => entry.events).length;
-const repeatedReplace = run(nodePath, [helperPath], JSON.stringify(replaceRequest(replacementDb)));
+const repeatedReplace = run(nodePath, [helperPath], JSON.stringify(replaceRequest(replacementDb, validReplacementEvents)));
 assert.equal(repeatedReplace.ok, true, JSON.stringify(repeatedReplace)); assert.equal(repeatedReplace.outcome, 'already-replaced');
 const afterRepeatedReplace = run(nodePath, [helperPath], JSON.stringify(request(replacementDb, 'inspect', {
   threadIds: [threadId, replacementThreadId],
@@ -396,7 +421,7 @@ run(nodePath, [helperPath], JSON.stringify(request(badHeadDb, 'append', {
   threadId, projectId, providerInstanceId, providerThreadId, driver: 'codex',
   nativeThreadRef: nativeRef, expectedConversationHeadRef: null, events: appendEvents,
 })));
-const badHeadReplacement = run(nodePath, [helperPath], JSON.stringify(replaceRequest(badHeadDb)));
+const badHeadReplacement = run(nodePath, [helperPath], JSON.stringify(replaceRequest(badHeadDb, replacementEventsForCurrentShell(badHeadDb))));
 assert.equal(badHeadReplacement.ok, false); assert.equal(badHeadReplacement.outcome, 'replace-conflict');
 const afterBadHead = run(nodePath, [helperPath], JSON.stringify(request(badHeadDb, 'inspect', {
   threadIds: [threadId, replacementThreadId],
@@ -408,5 +433,5 @@ console.log(JSON.stringify({result:'PASS',node:nodeVersion,inspect:true,write:tr
   duplicateAppendEventIds:true,appendRollback:true,existingThreadConflict:true,
   threadEnvelopeValidation:true,projectIdentityValidation:true,projectCreateRestriction:true,noResumeAppend:true,
   competingWriterAppend:true,tombstonedProjectNotResurrected:true,atomicReplacement:true,replacementRetry:true,
-  replacementIdentityConflicts:true,upgradedBindingAttach:true,attachHistoryCas:true,attachRetry:true,
+  replacementIdentityConflicts:true,replacementTombstoneGuard:true,upgradedBindingAttach:true,attachHistoryCas:true,attachRetry:true,
   globalProviderThreadIdConflict:true,closeReopen:true,rollback:true,projectCompensation:true}));

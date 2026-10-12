@@ -124,7 +124,7 @@ import * as assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join as join4 } from "node:path";
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Pipeable.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Pipeable.js
 var pipeArguments = (self2, args2) => {
   switch (args2.length) {
     case 0:
@@ -168,7 +168,7 @@ var Class = /* @__PURE__ */ (function() {
   return PipeableBase;
 })();
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Function.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Function.js
 var dual = function(arity, body) {
   if (typeof arity === "function") {
     return function() {
@@ -282,7 +282,7 @@ function memoizeIdempotent(f) {
   };
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/equal.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/equal.js
 var getAllObjectKeys = (obj) => {
   const keys4 = new Set(Reflect.ownKeys(obj));
   if (obj.constructor === Object) return keys4;
@@ -306,13 +306,13 @@ var getAllObjectKeys = (obj) => {
 var byReferenceInstances = /* @__PURE__ */ new WeakSet();
 var viewBytes = (view) => new Uint8Array(view.buffer, view.byteOffset, view.byteLength);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/hash.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/hash.js
 var backEdges = 0;
 var addBackEdge = () => {
   backEdges++;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Predicate.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Predicate.js
 function isString(input) {
   return typeof input === "string";
 }
@@ -361,7 +361,7 @@ function isIterable(input) {
   return hasProperty(input, Symbol.iterator) || isString(input);
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Hash.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Hash.js
 var symbol = "~effect/Hash";
 var hash = (self2) => {
   switch (typeof self2) {
@@ -485,7 +485,7 @@ var randomHashCache = /* @__PURE__ */ new WeakMap();
 var hashCache = /* @__PURE__ */ new WeakMap();
 var visitedObjects = /* @__PURE__ */ new WeakSet();
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Equal.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Equal.js
 var symbol2 = "~effect/Equal";
 function equals() {
   if (arguments.length === 1) {
@@ -650,7 +650,7 @@ function makeCompareSet(equivalence) {
 }
 var isEqual = (u) => hasProperty(u, symbol2);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Redactable.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Redactable.js
 var symbolRedactable = /* @__PURE__ */ Symbol.for("~effect/Redactable");
 var isRedactable = (u) => hasProperty(u, symbolRedactable);
 function redact(u) {
@@ -672,7 +672,7 @@ var emptyContext = {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Formatter.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Formatter.js
 function format(input, options) {
   const space2 = options?.space ?? 0;
   const ancestors = /* @__PURE__ */ new WeakSet();
@@ -824,7 +824,7 @@ function isJsonPrimitiveWrapper(object) {
   return false;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Inspectable.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Inspectable.js
 var NodeInspectSymbol = /* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom");
 var toJson = (input) => {
   try {
@@ -891,7 +891,7 @@ var Class2 = class {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/stackTraceLimit.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/stackTraceLimit.js
 var isStackTraceLimitWritable = () => {
   const desc = Object.getOwnPropertyDescriptor(Error, "stackTraceLimit");
   if (desc === void 0) {
@@ -908,7 +908,7 @@ var setStackTraceLimit = (value3) => {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Utils.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Utils.js
 var SingleShotGen = class {
   constructor(self2) {
     this.value = self2;
@@ -956,7 +956,7 @@ var pickInternalCall = () => {
 };
 var internalCall = /* @__PURE__ */ pickInternalCall();
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/record.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/record.js
 function assignProperty(self2, key, value3) {
   if (key === "__proto__") {
     Object.defineProperty(self2, key, {
@@ -978,7 +978,7 @@ function assignProperties(self2, source) {
   }
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/core.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/core.js
 var EffectTypeId = `~effect/Effect`;
 var ExitTypeId = `~effect/Exit`;
 var effectVariance = {
@@ -1382,13 +1382,13 @@ var done = (value3) => {
   return exitFail(Done(value3));
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Effectable.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Effectable.js
 var Prototype2 = (options) => makePrimitiveProto({
   op: options.label,
   [evaluate]: options.evaluate
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Equivalence.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Equivalence.js
 var make = (isEquivalent) => (self2, that) => self2 === that || isEquivalent(self2, that);
 var isStrictEquivalent = (x, y) => x === y;
 var strictEqual = () => isStrictEquivalent;
@@ -1415,7 +1415,7 @@ function Array_(item) {
   });
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/option.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/option.js
 var TypeId = "~effect/Option";
 var CommonProto = {
   [TypeId]: {
@@ -1481,7 +1481,7 @@ var SomeImpl = function(value3) {
 SomeImpl.prototype = SomeProto;
 var some = (value3) => new SomeImpl(value3);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/result.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/result.js
 var TypeId2 = "~effect/Result";
 var CommonProto2 = {
   [TypeId2]: {
@@ -1548,7 +1548,7 @@ var SuccessImpl = function(success) {
 SuccessImpl.prototype = SuccessProto;
 var succeed = (success) => new SuccessImpl(success);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Order.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Order.js
 function make2(compare2) {
   return (self2, that) => self2 === that ? 0 : compare2(self2, that);
 }
@@ -1567,7 +1567,7 @@ var isGreaterThan = (O) => dual(2, (self2, that) => O(self2, that) === 1);
 var isLessThanOrEqualTo = (O) => dual(2, (self2, that) => O(self2, that) !== 1);
 var isGreaterThanOrEqualTo = (O) => dual(2, (self2, that) => O(self2, that) !== -1);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Option.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Option.js
 var none2 = () => none;
 var some2 = some;
 var isOption2 = isOption;
@@ -1595,7 +1595,7 @@ var flatMap = /* @__PURE__ */ dual(2, (self2, f) => isNone2(self2) ? none2() : f
 var flatten = /* @__PURE__ */ flatMap(identity);
 var filter = /* @__PURE__ */ dual(2, (self2, predicate) => isNone2(self2) ? none2() : predicate(self2.value) ? some2(self2.value) : none2());
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Context.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Context.js
 var ServiceTypeId = "~effect/Context/Service";
 var Service = function() {
   function KeyClass() {
@@ -1797,7 +1797,7 @@ var mergeAll = (...ctxs) => {
 };
 var Reference = Service;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Duration.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Duration.js
 var TypeId4 = "~effect/Duration";
 var bigint0 = /* @__PURE__ */ BigInt(0);
 var bigint1 = /* @__PURE__ */ BigInt(1);
@@ -2073,14 +2073,14 @@ var Equivalence = (self2, that) => matchPair(self2, that, {
 });
 var equals2 = /* @__PURE__ */ dual(2, (self2, that) => Equivalence(self2, that));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/array.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/array.js
 var isArrayNonEmpty = (self2) => self2.length > 0;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/count.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/count.js
 var normalize = (n) => n > 0 ? Math.floor(n) : 0;
 var normalizeNonEmpty = (n) => Math.max(1, normalize(n));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Result.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Result.js
 var succeed2 = succeed;
 var fail2 = fail;
 var try_ = (evaluate2) => {
@@ -2117,10 +2117,10 @@ var getOrThrowWith = /* @__PURE__ */ dual(2, (self2, onFailure) => {
 var getOrThrow = /* @__PURE__ */ getOrThrowWith(identity);
 var flatMap2 = /* @__PURE__ */ dual(2, (self2, f) => isFailure2(self2) ? fail2(self2.failure) : f(self2.success));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Tuple.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Tuple.js
 var makeEquivalence = Tuple;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Iterable.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Iterable.js
 var headUnsafe = (self2) => {
   const iterator = self2[Symbol.iterator]();
   const result2 = iterator.next();
@@ -2145,7 +2145,7 @@ var findFirst = /* @__PURE__ */ dual(2, (self2, f) => {
   return none2();
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Record.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Record.js
 var has = /* @__PURE__ */ dual(2, (self2, key) => Object.hasOwn(self2, key));
 var map3 = /* @__PURE__ */ dual(2, (self2, f) => {
   const out = {
@@ -2170,7 +2170,7 @@ var makeEquivalence2 = (equivalence) => {
   return (self2, that) => is4(self2, that) && is4(that, self2);
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Array.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Array.js
 var Array2 = globalThis.Array;
 var fromIterable = (collection) => Array2.isArray(collection) ? collection : Array2.from(collection);
 var ensure = (self2) => Array2.isArray(self2) ? self2 : [self2];
@@ -2217,7 +2217,7 @@ var dedupe = (self2) => {
   return out;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Scheduler.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Scheduler.js
 var Scheduler = /* @__PURE__ */ Reference("effect/Scheduler", {
   fiberCached: true,
   defaultValue: () => new MixedScheduler()
@@ -2361,7 +2361,7 @@ var PreventSchedulerYield = /* @__PURE__ */ Reference("effect/Scheduler/PreventS
   defaultValue: () => false
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Data.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Data.js
 var Class3 = class extends Class {
   constructor(props) {
     super();
@@ -2373,7 +2373,7 @@ var Class3 = class extends Class {
 var Error3 = Error2;
 var TaggedError2 = TaggedError;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/encoding/EncodingError.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/encoding/EncodingError.js
 var EncodingErrorTypeId = "~effect/encoding/EncodingError";
 var EncodingError = class extends (/* @__PURE__ */ TaggedError2("EncodingError")) {
   /**
@@ -2388,7 +2388,7 @@ var EncodingError = class extends (/* @__PURE__ */ TaggedError2("EncodingError")
   [EncodingErrorTypeId] = EncodingErrorTypeId;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/encoding/Hex.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/encoding/Hex.js
 var encode = (input) => typeof input === "string" ? hexEncodeUint8Array(encoder.encode(input)) : hexEncodeUint8Array(input);
 var random2 = (length) => {
   switch (length) {
@@ -2477,7 +2477,7 @@ var fromHexChar = (byte) => {
   throw new TypeError("Invalid input");
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Tracer.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Tracer.js
 var ParentSpanKey = "effect/Tracer/ParentSpan";
 var ParentSpan = class extends (/* @__PURE__ */ Service()(ParentSpanKey, {
   fiberCached: true
@@ -2555,10 +2555,10 @@ var NativeSpan = class {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/metric.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/metric.js
 var FiberRuntimeMetricsKey = "effect/Metric/FiberRuntimeMetrics";
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/references.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/references.js
 var CurrentStackFrame = /* @__PURE__ */ Reference("effect/References/CurrentStackFrame", {
   fiberCached: true,
   defaultValue: constUndefined
@@ -2591,7 +2591,7 @@ var CurrentLogSpans = /* @__PURE__ */ Reference("effect/References/CurrentLogSpa
   defaultValue: () => []
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/tracer.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/tracer.js
 var makeStackCleaner = (line) => (stack) => {
   let cache2;
   return () => {
@@ -2606,7 +2606,7 @@ var makeStackCleaner = (line) => (stack) => {
   };
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/effect.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/effect.js
 var Interrupt = class extends ReasonBase {
   constructor(fiberId2, annotations = constEmptyAnnotations) {
     super("Interrupt", annotations, "Interrupted");
@@ -4762,7 +4762,7 @@ function interruptChildrenPatch() {
   fiberMiddleware.interruptChildren ??= fiberInterruptChildren;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Exit.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Exit.js
 var isExit2 = isExit;
 var succeed4 = exitSucceed;
 var failCause2 = exitFailCause;
@@ -4772,7 +4772,7 @@ var isSuccess3 = exitIsSuccess;
 var isFailure3 = exitIsFailure;
 var asVoidAll = exitAsVoidAll;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Deferred.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Deferred.js
 var TypeId5 = "~effect/Deferred";
 var DeferredProto = {
   [TypeId5]: {
@@ -4820,10 +4820,10 @@ var doneUnsafe = (self2, effect2) => {
   return true;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/References.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/References.js
 var TracerTimingEnabled2 = TracerTimingEnabled;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Scope.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Scope.js
 var Scope = scopeTag;
 var make7 = scopeMake;
 var makeUnsafe3 = scopeMakeUnsafe;
@@ -4834,7 +4834,7 @@ var fork = scopeFork;
 var forkUnsafe2 = scopeForkUnsafe;
 var close = scopeClose;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Layer.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Layer.js
 var TypeId6 = "~effect/Layer";
 var MemoMapTypeId = "~effect/Layer/MemoMap";
 var makeMemoMapEntry = (memoMap, layer12) => {
@@ -4944,7 +4944,7 @@ var provideWith = (self2, that, f) => fromBuild((memoMap, scope3) => flatMap3(Ar
 var provide2 = /* @__PURE__ */ dual(2, (self2, that) => provideWith(self2, that, identity));
 var provideMerge = /* @__PURE__ */ dual(2, (self2, that) => provideWith(self2, that, (self3, that2) => merge(that2, self3)));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Cause.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Cause.js
 var isCause2 = isCause;
 var isReason = isCauseReason;
 var isFailReason2 = isFailReason;
@@ -4963,11 +4963,11 @@ var Done2 = Done;
 var done3 = done;
 var IllegalArgumentError2 = IllegalArgumentError;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Clock.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Clock.js
 var Clock = ClockRef;
 var currentTimeMillis2 = currentTimeMillis;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/dateTime.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/dateTime.js
 var TypeId7 = "~effect/DateTime";
 var TimeZoneTypeId = "~effect/DateTime/TimeZone";
 var Proto2 = {
@@ -5414,7 +5414,7 @@ var formatIsoOffset = (self2) => {
 };
 var formatIsoZoned = (self2) => self2.zone._tag === "Offset" ? formatIsoOffset(self2) : `${formatIsoOffset(self2)}[${self2.zone.id}]`;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Number.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Number.js
 var Number3 = globalThis.Number;
 var remainder = /* @__PURE__ */ dual(2, (self2, divisor) => {
   if (!globalThis.Number.isFinite(self2) || !globalThis.Number.isFinite(divisor) || divisor === 0) {
@@ -5446,12 +5446,12 @@ function toScientificInteger(n) {
   return [coefficient, globalThis.Number(scientific.slice(eIndex + 1)) - digits.length + 1];
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/String.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/String.js
 var String3 = globalThis.String;
 var toLowerCase = (self2) => self2.toLowerCase();
 var trim = (self2) => self2.trim();
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Pull.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Pull.js
 var catchDone = /* @__PURE__ */ dual(2, (effect2, f) => catchCauseFilter(effect2, filterDoneLeftover, (l) => f(l)));
 var isDoneCause = (cause) => cause.reasons.some(isDoneFailure);
 var isDoneFailure = (failure) => failure._tag === "Fail" && isDone2(failure.error);
@@ -5484,7 +5484,7 @@ var matchEffect2 = /* @__PURE__ */ dual(2, (self2, options) => matchCauseEffect(
   }
 }));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Schedule.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Schedule.js
 var TypeId8 = "~effect/Schedule";
 var CurrentMetadata = /* @__PURE__ */ Reference("effect/Schedule/CurrentMetadata", {
   defaultValue: /* @__PURE__ */ constant({
@@ -5573,11 +5573,11 @@ var while_ = /* @__PURE__ */ dual(2, (self2, predicate) => fromStep(map5(toStep(
 })));
 var forever2 = /* @__PURE__ */ spaced(zero);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/layer.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/layer.js
 var provideLayer = (self2, layer12, options) => scopedWith((scope3) => flatMap3(options?.local ? buildWithMemoMap(layer12, makeMemoMapUnsafe(), scope3) : buildWithScope(layer12, scope3), (context3) => provideContext(self2, context3)));
 var provide3 = /* @__PURE__ */ dual((args2) => isEffect(args2[0]), (self2, source, options) => isContext(source) ? provideContext(self2, source) : provideLayer(self2, Array.isArray(source) ? mergeAll2(...source) : source, options));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schedule.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schedule.js
 var findErrorOnly = (cause) => cause.reasons.every(isFailReason) ? findError(cause) : fail2(cause);
 var repeatOrElse = /* @__PURE__ */ dual(3, (self2, schedule2, orElse) => flatMap3(toStepWithMetadata(schedule2), (step) => {
   let meta = CurrentMetadata.defaultValue();
@@ -5618,7 +5618,7 @@ var buildFromOptions = (options) => {
   return schedule2;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Effect.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Effect.js
 var isEffect2 = isEffect;
 var all2 = all;
 var forEach2 = forEach;
@@ -5707,7 +5707,7 @@ var flatMapEager2 = flatMapEager;
 var catchEager2 = catchEager;
 var fnUntracedEager2 = fnUntracedEager;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/BigInt.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/BigInt.js
 var BigInt3 = globalThis.BigInt;
 var toNumber = (b) => {
   if (b > BigInt3(Number.MAX_SAFE_INTEGER) || b < BigInt3(Number.MIN_SAFE_INTEGER)) {
@@ -5716,7 +5716,7 @@ var toNumber = (b) => {
   return some2(Number(b));
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/ByteSize.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/ByteSize.js
 var bigint03 = /* @__PURE__ */ BigInt(0);
 var bigint12 = /* @__PURE__ */ BigInt(1);
 var decimalBase = /* @__PURE__ */ BigInt(1e3);
@@ -5857,7 +5857,7 @@ var isByteSize = (input) => typeof input === "bigint" && input >= bigint03;
 var toBigInt = (self2) => self2;
 var toNumber2 = toNumber;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Chunk.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Chunk.js
 var TypeId9 = "~effect/Chunk";
 function copy(src, srcPos, dest, destPos, len) {
   for (let i = srcPos; i < Math.min(src.length, srcPos + len); i++) {
@@ -6021,17 +6021,17 @@ var fromArrayUnsafe = (self2) => self2.length === 0 ? empty3() : self2.length ==
 });
 var size = (self2) => self2.length;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Fiber.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Fiber.js
 var join = fiberJoin;
 var interrupt3 = fiberInterrupt;
 var getCurrent = getCurrentFiber;
 var runIn = fiberRunIn;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Latch.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Latch.js
 var makeUnsafe5 = makeLatchUnsafe;
 var make10 = makeLatch;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/MutableRef.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/MutableRef.js
 var TypeId10 = "~effect/MutableRef";
 var MutableRefProto = {
   [TypeId10]: TypeId10,
@@ -6053,7 +6053,7 @@ var set = /* @__PURE__ */ dual(2, (self2, value3) => {
   return self2;
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/MutableList.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/MutableList.js
 var Empty = /* @__PURE__ */ Symbol.for("effect/MutableList/Empty");
 var make12 = () => ({
   head: void 0,
@@ -6194,7 +6194,7 @@ var filter4 = (self2, f) => {
 };
 var remove2 = (self2, value3) => filter4(self2, (v) => v !== value3);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/PubSub.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/PubSub.js
 var TypeId11 = "~effect/PubSub";
 var SubscriptionTypeId = "~effect/PubSub/Subscription";
 var make13 = (options) => sync2(() => makePubSubUnsafe(options.atomicPubSub(), /* @__PURE__ */ new Map(), makeUnsafe3(), makeUnsafe5(false), make11(false), options.strategy(), make11(none2())));
@@ -6693,7 +6693,7 @@ var emptyReplayWindow = {
   close: () => void 0
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Queue.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Queue.js
 var TypeId12 = "~effect/Queue";
 var EnqueueTypeId = "~effect/Queue/Enqueue";
 var DequeueTypeId = "~effect/Queue/Dequeue";
@@ -7021,7 +7021,7 @@ var finalize = (self2, exit6) => {
   openState.awaiters.clear();
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Semaphore.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Semaphore.js
 var makeUnsafe6 = (permits) => new SemaphoreImpl(permits);
 var waitForPermits = (self2, n, effect2) => callback((resume) => {
   if (self2.free >= n) return resume(effect2);
@@ -7118,7 +7118,7 @@ var SemaphoreImpl = class {
 };
 var make15 = (permits) => sync(() => new SemaphoreImpl(permits));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Channel.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Channel.js
 var TypeId13 = "~effect/Channel";
 var isChannel = (u) => hasProperty(u, TypeId13);
 var ChannelProto = {
@@ -7487,7 +7487,7 @@ var toPull = /* @__PURE__ */ fnUntraced2(
 );
 var toPullScoped = (self2, scope3) => toTransform(self2)(done3(), scope3);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/stream.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/stream.js
 var TypeId14 = "~effect/Stream";
 var streamVariance = {
   _R: identity,
@@ -7505,7 +7505,7 @@ Stream.prototype = {
 };
 var fromChannel = (channel) => new Stream(channel);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/MutableHashMap.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/MutableHashMap.js
 var TypeId15 = "~effect/MutableHashMap";
 var MutableHashMapProto = {
   [TypeId15]: TypeId15,
@@ -7617,7 +7617,7 @@ var remove3 = /* @__PURE__ */ dual(2, (self2, key_) => {
 });
 var size2 = (self2) => self2.backing.size;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Stream.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Stream.js
 var TypeId16 = "~effect/Stream";
 var isStream = (u) => hasProperty(u, TypeId16);
 var fromChannel2 = fromChannel;
@@ -7782,7 +7782,7 @@ var toReadableStreamWith = /* @__PURE__ */ dual((args2) => isStream(args2[0]), (
   }, options?.strategy);
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/DateTime.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/DateTime.js
 var isDateTime2 = isDateTime;
 var isTimeZone2 = isTimeZone;
 var isTimeZoneOffset2 = isTimeZoneOffset;
@@ -7808,7 +7808,7 @@ var add3 = add2;
 var formatIso2 = formatIso;
 var formatIsoZoned2 = formatIsoZoned;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Schema.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Schema.js
 var Schema_exports = {};
 __export(Schema_exports, {
   Any: () => Any2,
@@ -8158,7 +8158,7 @@ __export(Schema_exports, {
   withDecodingDefaultTypeKey: () => withDecodingDefaultTypeKey
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/BigDecimal.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/BigDecimal.js
 var FINITE_INT_REGEXP = /^[+-]?\d+$/;
 var TypeId17 = "~effect/BigDecimal";
 var BigDecimalProto = {
@@ -8311,7 +8311,7 @@ var toExponential = (n) => {
 };
 var isZero2 = (n) => n.value === bigint04;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/encoding/Base64.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/encoding/Base64.js
 var encode2 = (input) => encodeBytes(typeof input === "string" ? encoder2.encode(input) : input);
 var decode2 = (str) => {
   const stripped = stripCrlf(str);
@@ -8390,7 +8390,7 @@ var getCode = (charCode) => {
   return codes[charCode];
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/hashMap.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/hashMap.js
 var HashMapTypeId = "~effect/HashMap";
 var SHIFT = 5;
 var BUCKET_SIZE = 1 << SHIFT;
@@ -9025,14 +9025,14 @@ var keys2 = (self2) => new HashMapIterator(self2._root, identity);
 var entries = (self2) => self2[Symbol.iterator]();
 var size3 = (self2) => self2.size;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/HashMap.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/HashMap.js
 var isHashMap2 = isHashMap;
 var fromIterable6 = fromIterable5;
 var entries2 = entries;
 var toEntries = (self2) => Array.from(entries2(self2));
 var size4 = size3;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/hashSet.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/hashSet.js
 var HashSetTypeId = "~effect/HashSet";
 var hashSetSeed = /* @__PURE__ */ string(HashSetTypeId);
 var HashSetProto = {
@@ -9087,12 +9087,12 @@ var every2 = (self2, predicate) => {
   return true;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/HashSet.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/HashSet.js
 var fromIterable8 = fromIterable7;
 var isHashSet2 = isHashSet;
 var size6 = size5;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/Cookies.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/Cookies.js
 var TypeId18 = "~effect/http/Cookies";
 var isCookies = (u) => hasProperty(u, TypeId18);
 var CookieTypeId = "~effect/http/Cookies/Cookie";
@@ -9441,7 +9441,7 @@ var tryDecodeURIComponent = (str) => {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/redacted.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/redacted.js
 var redactedRegistry = /* @__PURE__ */ new WeakMap();
 var value = (self2) => {
   if (redactedRegistry.has(self2)) {
@@ -9451,7 +9451,7 @@ var value = (self2) => {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Redacted.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Redacted.js
 var TypeId19 = "~effect/Redacted";
 var isRedacted = (u) => hasProperty(u, TypeId19);
 var make21 = (value3, options) => {
@@ -9484,7 +9484,7 @@ var Proto4 = {
 var value2 = value;
 var makeEquivalence5 = (isEquivalent) => make((x, y) => isEquivalent(value2(x), value2(y)));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/Headers.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/Headers.js
 var TypeId20 = /* @__PURE__ */ Symbol.for("~effect/http/Headers");
 var isHeaders = (u) => hasProperty(u, TypeId20);
 var Proto5 = /* @__PURE__ */ Object.defineProperties(/* @__PURE__ */ Object.create(null), {
@@ -9578,7 +9578,7 @@ var CurrentRedactedNames = /* @__PURE__ */ Reference("effect/Headers/CurrentReda
   defaultValue: () => ["authorization", "cookie", "set-cookie", "x-api-key", "AWSAccessKeyId", "Signature", "sig", "X-Goog-Signature"]
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/UrlParams.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/UrlParams.js
 var TypeId21 = "~effect/http/UrlParams";
 var isUrlParams = (u) => hasProperty(u, TypeId21);
 var Proto6 = {
@@ -9664,7 +9664,7 @@ var toRecord2 = (self2) => {
 };
 var toReadonlyRecord = toRecord2;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/graph.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/graph.js
 var TypeId22 = "~effect/Graph";
 var isGraph = (u) => hasProperty(u, TypeId22);
 var toImpl = (graph) => graph;
@@ -9788,7 +9788,7 @@ var hydrate = (snapshot2) => {
   return graph;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/annotations.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/annotations.js
 function resolve(ast) {
   return ast.checks ? ast.checks[ast.checks.length - 1].annotations : ast.annotations;
 }
@@ -9810,7 +9810,7 @@ var getExpected = /* @__PURE__ */ memoize((ast) => {
 });
 var annotationExcludedKeys = /* @__PURE__ */ new Set([SENTINELS_ANNOTATION_KEY, STRUCTURAL_ANNOTATION_KEY, "representation", "arbitraryConstraint", "toJsonSchema", "toCode", "toEquivalence", "toFormatter", "toCodec", "toCodecJson", "toCodecStringTree", "toCodecIso", "toCodecArbitrary"]);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/parser.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/parser.js
 var missing = /* @__PURE__ */ Symbol();
 var succeed9 = succeed4;
 var missingExit = /* @__PURE__ */ succeed9(missing);
@@ -9818,7 +9818,7 @@ var sameExit = /* @__PURE__ */ succeed9(missing);
 var toOption = (value3) => value3 === missing ? none2() : some2(value3);
 var fromOptionExit = (option2) => option2._tag === "None" ? missingExit : succeed9(option2.value);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaIssue.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaIssue.js
 var TypeId23 = "~effect/SchemaIssue/Issue";
 function isIssue(u) {
   return hasProperty(u, TypeId23) && u[TypeId23] === TypeId23;
@@ -10161,7 +10161,7 @@ function findMessage(issue) {
   if (typeof message2 === "string") return message2;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/cause.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/cause.js
 function getSchemaIssue(cause) {
   let issue;
   for (const reason of cause.reasons) {
@@ -10182,7 +10182,7 @@ function getSchemaIssueOrThrow(cause, message2) {
   return issue;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/encoding/Base64Url.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/encoding/Base64Url.js
 var encode3 = (input) => encode2(input).replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
 var decode3 = (str) => {
   const stripped = str.replace(/[\n\r]/g, "");
@@ -10210,7 +10210,7 @@ var decode3 = (str) => {
 var decodeString3 = (str) => map2(decode3(str), (_) => decoder3.decode(_));
 var decoder3 = /* @__PURE__ */ new TextDecoder();
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaGetter.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaGetter.js
 var makeGetter = (fields) => Object.assign(Object.create(Prototype), fields);
 function fail10(f) {
   return transformOptionalEffect((oe, options) => fail6(f(oe, options)));
@@ -10486,7 +10486,7 @@ function collectBracketPathEntries(isLeaf) {
   };
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaTransformation.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaTransformation.js
 var Middleware = class extends Class {
   _tag = "Middleware";
   decode;
@@ -10682,7 +10682,7 @@ function fromJsonString(options) {
 var fromFormData = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeFormData(), /* @__PURE__ */ encodeFormData());
 var fromURLSearchParams = /* @__PURE__ */ new Transformation(/* @__PURE__ */ decodeURLSearchParams(), /* @__PURE__ */ encodeURLSearchParams());
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaAST.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaAST.js
 function makeGuard(tag2) {
   return (ast) => ast._tag === tag2;
 }
@@ -12808,7 +12808,7 @@ var StringTree = /* @__PURE__ */ new Declaration([], () => (input, ast, options)
 });
 var unknownToStringTree = /* @__PURE__ */ new Link(StringTree, /* @__PURE__ */ passthrough3());
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/interpreter.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/interpreter.js
 var flatMapTransformation = (result2, current, f) => result2 === sameExit ? f(current) : flatMapEager2(result2, f);
 function compileTransformation(transformation) {
   if (transformation._tag === "Middleware") {
@@ -12965,7 +12965,7 @@ function compile(ast, compile2, compileField2, base, specialize) {
   };
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/compilerRegistry.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/compilerRegistry.js
 var invalid3 = /* @__PURE__ */ Symbol();
 var cache = /* @__PURE__ */ new WeakMap();
 var compiler;
@@ -13059,7 +13059,7 @@ function resolve2(ast) {
   return entry;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaParser.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/SchemaParser.js
 function makeEffect(schema2) {
   const ast = schema2.ast;
   let parser;
@@ -13325,7 +13325,7 @@ function makeConstructorSync(ast) {
 var normalCompiler = (ast) => resolve2(ast).parser;
 var constructorCompiler = (ast) => resolve2(ast).makeEffect;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/make.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/make.js
 var TypeId26 = "~effect/Schema/Schema";
 var RebuildOptions = /* @__PURE__ */ Symbol();
 var SchemaProto = {
@@ -13386,7 +13386,7 @@ function make26(ast, options) {
   return self2;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/JsonPointer.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/JsonPointer.js
 function escapeToken(token) {
   return token.replace(/~/g, "~0").replace(/\//g, "~1");
 }
@@ -13416,7 +13416,7 @@ function formatUriFragment(path2) {
   return path2.reduce((fragment3, token) => `${fragment3}/${formatUriFragmentToken(token)}`, "#");
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/JsonSchema.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/JsonSchema.js
 var META_SCHEMA_URI_DRAFT_07 = "http://json-schema.org/draft-07/schema#";
 var META_SCHEMA_URI_DRAFT_2020_12 = "https://json-schema.org/draft/2020-12/schema";
 function isMetaSchemaUri(value3, uri) {
@@ -13776,7 +13776,7 @@ function convertLegacyId(source, out, targetKey, dialect) {
   }
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toCodec.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toCodec.js
 function toCodecJson(schema2) {
   return make26(toCodecJsonAST(schema2.ast), {
     schema: schema2
@@ -13984,11 +13984,11 @@ function toCodecArrayFromSingleASTStep(ast) {
   return ast._tag === "Declaration" || ast._tag === "Arrays" || ast._tag === "Objects" || ast._tag === "Union" || ast._tag === "Suspend" ? ast.recur(toCodecArrayFromSingleAST) : ast;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/RegExp.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/RegExp.js
 var RegExp2 = globalThis.RegExp;
 var escape = (string5) => string5.replace(/[/\\^$*+?.()|[\]{}]/g, "\\$&");
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/errors.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/errors.js
 function errorWithPath(message2, path2) {
   if (path2.length > 0) {
     message2 += `
@@ -13997,7 +13997,7 @@ function errorWithPath(message2, path2) {
   return new Error(message2);
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toJsonSchemaDocument.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toJsonSchemaDocument.js
 function formatDefinitionReference(key) {
   return `#/$defs/${formatUriFragmentToken(key)}`;
 }
@@ -14623,7 +14623,7 @@ function toJsonSchemaDocument(document3, options) {
   };
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toRepresentation.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toRepresentation.js
 var defaultReferencePolicy = ({
   identifier: identifier3
 }) => identifier3;
@@ -14940,7 +14940,7 @@ function toRepresentations(asts, options) {
   }
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/standardSchema.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/standardSchema.js
 function makeStandardResult(exit6) {
   return isSuccess3(exit6) ? exit6.value : {
     issues: [{
@@ -15040,7 +15040,7 @@ function toStandardJSONSchemaV1(self2) {
   });
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/JsonPatch.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/JsonPatch.js
 function get5(oldValue, newValue) {
   const patches = [];
   getLoop(oldValue, newValue, "", patches);
@@ -15221,7 +15221,7 @@ function rebuildFromStack(stack, newParent) {
   return acc;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toDifferJsonPatch.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toDifferJsonPatch.js
 function toDifferJsonPatch(schema2) {
   const serializer2 = toCodecJson(schema2);
   const get10 = encodeSync(serializer2);
@@ -15238,7 +15238,7 @@ function toDifferJsonPatch(schema2) {
   };
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toEncoderXml.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toEncoderXml.js
 function toEncoderXml(codec, options) {
   const rootName = resolveIdentifier(codec.ast) ?? resolveTitle(codec.ast);
   const serialize4 = encodeEffect(toCodecStringTree(codec));
@@ -15337,7 +15337,7 @@ var xml = {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toEquivalence.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toEquivalence.js
 var toEquivalence = /* @__PURE__ */ memoize((ast) => {
   return recur(ast);
 });
@@ -15521,7 +15521,7 @@ function causeEquivalence(error, defect) {
   return (a, b) => reasons(a.reasons, b.reasons);
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toFormatter.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toFormatter.js
 function causeReasonToFormatter(error, defect) {
   return (reason) => {
     switch (reason._tag) {
@@ -15736,7 +15736,7 @@ function toFormatter(ast, options) {
   }
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Struct.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Struct.js
 var pick = /* @__PURE__ */ dual(2, (self2, keys4) => {
   return buildStruct(self2, (k, v) => hasPropertyKey(keys4, k) ? [k, v] : void 0);
 });
@@ -15769,7 +15769,7 @@ function buildStruct(source, f) {
   return out;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Optic.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Optic.js
 function makeIso(get10, set8) {
   return make27(primitiveNode("Iso", get10, set8));
 }
@@ -16115,7 +16115,7 @@ function id() {
   return identityIso;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toIso.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schema/toIso.js
 function toIso(schema2) {
   const serializer2 = toCodecIso(schema2);
   return makeIso(encodeSync(serializer2), decodeSync(serializer2));
@@ -16127,13 +16127,13 @@ function toIsoFocus(_) {
   return id();
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schemaError.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/internal/schemaError.js
 var SchemaErrorTypeId = "~effect/Schema/SchemaError";
 function isSchemaError(u) {
   return hasProperty(u, SchemaErrorTypeId) && u[SchemaErrorTypeId] === SchemaErrorTypeId;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/net/NetAddress.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/net/NetAddress.js
 var TypeId27 = "~effect/net/NetAddress";
 var ipv4Value = (self2) => self2.value;
 var ipv6Words = (self2) => self2;
@@ -16563,7 +16563,7 @@ var unixPathAddress = (path2) => {
   return Object.freeze(self2);
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/net/IpInterface.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/net/IpInterface.js
 var TypeId28 = "~effect/net/IpInterface";
 var isIpv4Interface = (u) => isIpInterface(u) && isIpv4Address(u.address);
 var isIpv6Interface = (u) => isIpInterface(u) && isIpv6Address(u.address);
@@ -16627,7 +16627,7 @@ var ipv6FromString2 = (input, options) => flatMap2(parseAddressWithPrefix(input,
 var fromString3 = (input, options) => flatMap2(parseAddressWithPrefix(input, options), (parts) => flatMap2(ipFromString(parts.address), (address) => make28(address, parts.prefixLength ?? width(address))));
 var format5 = (self2) => `${formatIp(self2.address)}/${self2.prefixLength}`;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/net/IpNetwork.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/net/IpNetwork.js
 var TypeId29 = "~effect/net/IpNetwork";
 var isIpv4Network = (u) => isIpNetwork(u) && isIpv4Address(u.address);
 var isIpv6Network = (u) => isIpNetwork(u) && isIpv6Address(u.address);
@@ -16698,7 +16698,7 @@ var fromString4 = (input) => {
 };
 var format6 = (self2) => `${formatIp(self2.address)}/${self2.prefixLength}`;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Schema.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Schema.js
 var TypeId30 = TypeId26;
 function declareConstructor() {
   return (typeParameters, run4, annotations) => {
@@ -20354,7 +20354,7 @@ function resolveAnnotationsKey(schema2) {
   return schema2.ast.context?.annotations;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/reactivity/Reactivity.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/reactivity/Reactivity.js
 var TypeId31 = "~effect/reactivity/Reactivity";
 var Reactivity = /* @__PURE__ */ Service("effect/reactivity/Reactivity");
 var make31 = /* @__PURE__ */ sync2(() => {
@@ -20485,7 +20485,7 @@ var keysToHashes = (keys4, f) => {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/sql/SqlError.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/sql/SqlError.js
 var TypeId32 = "~effect/sql/SqlError";
 var ReasonTypeId = "~effect/sql/SqlError/Reason";
 var ReasonFields = {
@@ -20841,7 +20841,7 @@ var classifySqliteError = (cause, {
   return new UnknownError2(props);
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/sql/Statement.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/sql/Statement.js
 var FragmentTypeId = "~effect/sql/Statement/Fragment";
 var fragment = (segments) => ({
   [FragmentTypeId]: FragmentTypeId,
@@ -21450,7 +21450,7 @@ function in_() {
 }
 var neverFragment = /* @__PURE__ */ fragment([/* @__PURE__ */ literal("1=0")]);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/sql/SqlClient.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/sql/SqlClient.js
 var TypeId33 = "~effect/sql/SqlClient";
 var SqlClient = /* @__PURE__ */ Service("effect/sql/SqlClient");
 var clientIdCounter = 0;
@@ -22535,10 +22535,10 @@ var AcpRegistryOperationError = class extends TaggedError3()(
 ) {
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpMethod.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpMethod.js
 var hasBody = (method) => method !== "GET" && method !== "HEAD" && method !== "OPTIONS" && method !== "TRACE";
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpStatus.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpStatus.js
 var codeByLiteral = {
   Continue: 100,
   SwitchingProtocols: 101,
@@ -22605,7 +22605,7 @@ var codeByLiteral = {
 };
 var fromLiteral = (literal2) => codeByLiteral[literal2];
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiSchema.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiSchema.js
 var StreamSchemaTypeId = "~effect/http-api/HttpApiSchema/Stream";
 function status(code4) {
   const statusCode = typeof code4 === "string" ? fromLiteral(code4) : code4;
@@ -23313,7 +23313,7 @@ var ScopedThreadRef = Struct({
   threadId: ThreadId
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/PlatformError.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/PlatformError.js
 var TypeId34 = "~effect/PlatformError";
 var BadArgument = class extends (/* @__PURE__ */ TaggedError2("BadArgument")) {
   /**
@@ -23357,10 +23357,10 @@ var PlatformError = class extends (/* @__PURE__ */ TaggedError2("PlatformError")
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/FileSystem.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/FileSystem.js
 var FileSystem = /* @__PURE__ */ Service("effect/FileSystem");
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpBody.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpBody.js
 var TypeId35 = "~effect/http/HttpBody";
 var HttpBodyErrorTypeId = "~effect/http/HttpBody/HttpBodyError";
 var HttpBodyError = class extends (/* @__PURE__ */ TaggedError2("HttpBodyError")) {
@@ -23457,10 +23457,10 @@ var jsonSchema = (schema2, options) => {
   })), flatMap4((body2) => json(body2, contentType)));
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/ErrorReporter.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/ErrorReporter.js
 var ignore3 = "~effect/ErrorReporter/ignore";
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpClientError.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpClientError.js
 var TypeId36 = "~effect/http/HttpClientError";
 var HttpClientError = class extends (/* @__PURE__ */ TaggedError2("HttpClientError")) {
   constructor(props) {
@@ -23547,7 +23547,7 @@ var EmptyBodyError = class extends (/* @__PURE__ */ TaggedError2("EmptyBodyError
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/Url.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/Url.js
 var UrlError = class extends (/* @__PURE__ */ TaggedError2("UrlError")) {
 };
 var make34 = (url, params, hash2) => try_({
@@ -23575,7 +23575,7 @@ var baseUrl = () => {
   return void 0;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpClientRequest.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpClientRequest.js
 var TypeId37 = "~effect/http/HttpClientRequest";
 var Proto8 = {
   [TypeId37]: TypeId37,
@@ -23614,7 +23614,7 @@ function toUrl(self2) {
   return none2();
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpIncomingMessage.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpIncomingMessage.js
 var TypeId38 = "~effect/http/HttpIncomingMessage";
 var MaxBodySize = /* @__PURE__ */ Reference("effect/http/HttpIncomingMessage/MaxBodySize", {
   defaultValue: () => void 0
@@ -23644,7 +23644,7 @@ var inspect = (self2, that) => {
   return obj;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpClientResponse.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpClientResponse.js
 var TypeId39 = "~effect/http/HttpClientResponse";
 var WebHttpClientResponse = class extends Class2 {
   [TypeId38];
@@ -23769,11 +23769,11 @@ var WebHttpClientResponse = class extends Class2 {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/internal/headers.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/internal/headers.js
 var Proto9 = /* @__PURE__ */ Object.getPrototypeOf(empty10);
 var emptyMutableUnsafe = () => Object.create(Proto9);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpServerResponse.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpServerResponse.js
 var TypeId40 = "~effect/http/HttpServerResponse";
 var empty14 = (options) => makeResponse({
   status: options?.status ?? 204,
@@ -24023,10 +24023,10 @@ var makeResponse = (options, ownedHeaders) => {
   return self2;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpServerRespondable.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpServerRespondable.js
 var symbol4 = "~effect/http/HttpServerRespondable";
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpServerError.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpServerError.js
 var TypeId41 = "~effect/http/HttpServerError";
 var HttpServerError = class extends (/* @__PURE__ */ TaggedError2("HttpServerError")) {
   constructor(props) {
@@ -24128,7 +24128,7 @@ var formatRequestMessage = (reason, description, info) => {
   return description ? `${prefix}: ${description}` : prefix;
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Path.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Path.js
 var TypeId42 = "~effect/Path";
 var Path = /* @__PURE__ */ Service("effect/Path");
 function normalizeStringPosix(path2, allowAboveRoot) {
@@ -24596,7 +24596,7 @@ var posixImpl = /* @__PURE__ */ Path.of({
   toNamespacedPath: identity
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser/internal/contentType.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser/internal/contentType.js
 var paramRE = /; *([!#$%&'*+.^\w`|~-]+)=("(?:[\v\u0020\u0021\u0023-\u005b\u005d-\u007e\u0080-\u{10ffff}]|\\[\v\u0020-\u{10ffff}])*"|[!#$%&'*+.^\w`|~-]+) */gu;
 var quotedPairRE = /\\([\v\u0020-\u{10ffff}])/gu;
 var mediaTypeRE = /^[!#$%&'*+.^\w|~-]+\/[!#$%&'*+.^\w|~-]+$/u;
@@ -24647,7 +24647,7 @@ function parse(header, withoutSlash = false) {
   return result2;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser/internal/headers.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser/internal/headers.js
 var constMaxPairs = 100;
 var constMaxSize = 16 * 1024;
 var State = {
@@ -24852,7 +24852,7 @@ function make35() {
   };
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser/internal/search.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser/internal/search.js
 function makeState(needle_) {
   const needle = new TextEncoder().encode(needle_);
   const needleLength = needle.length;
@@ -24972,7 +24972,7 @@ function make36(needle, callback3, seed, minimumChunkLength) {
   };
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser/internal/multipart.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser/internal/multipart.js
 var State2 = {
   headers: 0,
   body: 1
@@ -25216,12 +25216,12 @@ function decodeField(info, value3) {
   return getDecoder(info.contentTypeParameters.charset ?? "utf-8").decode(value3);
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/MultipartParser.js
 var make38 = make37;
 var defaultIsFile2 = defaultIsFile;
 var decodeField2 = decodeField;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/Multipart.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/Multipart.js
 var TypeId43 = "~effect/http/Multipart";
 var MultipartErrorTypeId = "~effect/http/Multipart/MultipartError";
 var toMultipartError = (cause) => isMultipartError(cause) ? cause : MultipartError.fromReason("InternalError", cause);
@@ -25521,7 +25521,7 @@ var FieldMimeTypes = /* @__PURE__ */ Reference("effect/http/Multipart/FieldMimeT
   defaultValue: /* @__PURE__ */ constant(["application/json"])
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpServerRequest.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpServerRequest.js
 var TypeId44 = "~effect/http/HttpServerRequest";
 var HttpServerRequest = /* @__PURE__ */ Service("effect/http/HttpServerRequest");
 var removeHost = (url) => {
@@ -25917,7 +25917,7 @@ var isFormData = (u) => typeof FormData !== "undefined" && u instanceof FormData
 var isBodyInit = (u) => typeof u === "string" || typeof ArrayBuffer !== "undefined" && (u instanceof ArrayBuffer || ArrayBuffer.isView(u)) || typeof Blob !== "undefined" && u instanceof Blob || isFormData(u) || typeof URLSearchParams !== "undefined" && u instanceof URLSearchParams || isReadableStream2(u);
 var textDecoder2 = /* @__PURE__ */ new TextDecoder();
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpMiddleware.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpMiddleware.js
 var loggerDisabledRequests = /* @__PURE__ */ new WeakSet();
 var withLoggerDisabled = (self2) => withFiber2((fiber2) => {
   const request = getUnsafe(fiber2.context, HttpServerRequest);
@@ -25925,7 +25925,7 @@ var withLoggerDisabled = (self2) => withFiber2((fiber2) => {
   return self2;
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Ref.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Ref.js
 var TypeId45 = "~effect/Ref";
 var RefProto = {
   [TypeId45]: {
@@ -25955,7 +25955,7 @@ var update = /* @__PURE__ */ dual(2, (self2, f) => sync2(() => {
   self2.ref.current = f(self2.ref.current);
 }));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpRouter.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http/HttpRouter.js
 var HttpRouter = /* @__PURE__ */ Service("effect/http/HttpRouter");
 var removeTrailingSlash = (path2) => path2.endsWith("/") ? path2.slice(0, -1) : path2;
 var prefixPath = /* @__PURE__ */ dual(2, (self2, prefix) => {
@@ -26037,14 +26037,14 @@ var getMiddleware = (context3) => {
 };
 var disableLogger = middleware(withLoggerDisabled).layer;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/internal/mediaType.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/internal/mediaType.js
 function normalize3(contentType) {
   const normalized = contentType.toLowerCase().trim();
   const index3 = normalized.indexOf(";");
   return index3 === -1 ? normalized : normalized.slice(0, index3).trim();
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiEndpoint.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiEndpoint.js
 var TypeId46 = "~effect/http-api/HttpApiEndpoint";
 var Proto11 = {
   [TypeId46]: TypeId46,
@@ -26340,7 +26340,7 @@ var put = /* @__PURE__ */ make40("PUT");
 var patch = /* @__PURE__ */ make40("PATCH");
 var del = /* @__PURE__ */ make40("DELETE");
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApi.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApi.js
 var TypeId47 = "~effect/http-api/HttpApi";
 var Proto12 = {
   [TypeId47]: TypeId47,
@@ -26414,7 +26414,7 @@ var make41 = (identifier3) => makeProto2({
   annotations: empty()
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiGroup.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiGroup.js
 var TypeId48 = "~effect/http-api/HttpApiGroup";
 var Proto13 = {
   [TypeId48]: TypeId48,
@@ -26490,7 +26490,7 @@ var make42 = (identifier3, options) => makeProto3({
   annotations: empty()
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiMiddleware.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiMiddleware.js
 var TypeId49 = "~effect/http-api/HttpApiMiddleware";
 var SecurityTypeId = "~effect/http-api/HttpApiMiddleware/Security";
 var Service2 = () => (id2, options) => {
@@ -32922,7 +32922,7 @@ var ProviderReplayNdjsonRecord = Union2([
   ProviderReplayEntry
 ]);
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiSecurity.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/HttpApiSecurity.js
 var TypeId50 = "~effect/http-api/HttpApiSecurity";
 var Proto14 = {
   [TypeId50]: TypeId50,
@@ -32941,7 +32941,7 @@ var annotate3 = /* @__PURE__ */ dual(3, (self2, service3, value3) => Object.assi
   annotations: add(self2.annotations, service3, value3)
 }));
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/OpenApi.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/http-api/OpenApi.js
 var Title = class extends (/* @__PURE__ */ Service()("effect/http-api/OpenApi/Title")) {
 };
 var Version = class extends (/* @__PURE__ */ Service()("effect/http-api/OpenApi/Version")) {
@@ -34715,7 +34715,7 @@ var BrowserProfile = Struct({
 });
 var DEFAULT_BROWSER_PROFILE_ID = "default";
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Cache.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/Cache.js
 var TypeId51 = "~effect/Cache";
 var makeWith2 = (lookup2, options) => contextWith((context3) => {
   const self2 = Object.create(Proto15);
@@ -34822,7 +34822,7 @@ var checkCapacity = (self2) => {
   }
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/PrimaryKey.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/PrimaryKey.js
 var symbol5 = "~effect/PrimaryKey";
 
 // ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/packages/contracts/src/device.ts
@@ -42925,7 +42925,7 @@ var WorktreeMcpFailure = class extends TaggedError3()(
 ) {
 };
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/rpc/RpcSchema.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/rpc/RpcSchema.js
 var StreamSchemaTypeId2 = "~effect/rpc/RpcSchema/StreamSchema";
 var schema = /* @__PURE__ */ declare(isStream);
 function Stream2(success, error) {
@@ -42936,7 +42936,7 @@ function Stream2(success, error) {
   });
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/rpc/Rpc.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/rpc/Rpc.js
 var TypeId52 = "~effect/rpc/Rpc";
 var Proto16 = {
   [TypeId52]: TypeId52,
@@ -43056,7 +43056,7 @@ var make44 = (tag2, options) => {
 var WrapperTypeId = "~effect/rpc/Rpc/Wrapper";
 var isWrapper = (u) => WrapperTypeId in u;
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/rpc/RpcGroup.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/rpc/RpcGroup.js
 var RpcGroupProto = {
   add(...rpcs) {
     const requests = new Map(this.requests);
@@ -43200,7 +43200,7 @@ var make45 = (...rpcs) => makeProto5({
   annotations: empty()
 });
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/rpc/RpcMiddleware.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/rpc/RpcMiddleware.js
 var TypeId53 = "~effect/rpc/RpcMiddleware";
 var Service3 = () => (id2, options) => {
   const limit = getStackTraceLimit();
@@ -45735,7 +45735,7 @@ function projectDomainEventForWire(event) {
   return event.type === "turn-item.updated" ? { ...event, payload: projectTurnItemForWire(event.payload) } : event.type === "context-handoff.updated" ? { ...event, payload: projectContextHandoffForWire(event.payload) } : event;
 }
 
-// ../t3-import/artifacts/t3-reference/t3code-ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/sql/SqlSchema.js
+// ../t3-import/artifacts/t3-reference-2994/t3code-d07a07f33c0a1b317dea6234636976231c3688b5/node_modules/.pnpm/effect@4.0.2_patch_hash=ec61ee307eaec3e17f757e0e6a16296ea4b7a8c3188df0c6ec5e66301fd78688/node_modules/effect/dist/sql/SqlSchema.js
 var findAll = (options) => {
   const encodeRequest2 = encodeEffect2(options.Request);
   const decode6 = decodeUnknownEffect2(mutable2(ArraySchema(options.Result)));
@@ -80427,6 +80427,45 @@ async function appendRequest(request) {
 }
 var activeRunStatuses = /* @__PURE__ */ new Set(["preparing", "queued", "starting", "running", "waiting"]);
 var activeRequestStatuses = /* @__PURE__ */ new Set(["pending", "queued", "running", "waiting"]);
+var threadPayloadFields = /* @__PURE__ */ new Set([
+  "id",
+  "projectId",
+  "title",
+  "createdBy",
+  "creationSource",
+  "providerInstanceId",
+  "modelSelection",
+  "runtimeMode",
+  "interactionMode",
+  "branch",
+  "worktreePath",
+  "linkedPullRequest",
+  "pullRequests",
+  "branchPullRequest",
+  "activeProviderThreadId",
+  "historyOrigin",
+  "lineage",
+  "forkedFrom",
+  "createdAt",
+  "updatedAt",
+  "archivedAt",
+  "settledOverride",
+  "settledAt",
+  "unsettledAt",
+  "snoozedUntil",
+  "snoozedAt",
+  "lastSnoozeWakeAt",
+  "limitRecovery",
+  "pinnedAt",
+  "autoSettleDisabledAt",
+  "pinOrderKey",
+  "activeOrderKey",
+  "lastVisitedAt",
+  "titleRegeneration",
+  "rollbackRequestId",
+  "rollbackFailure",
+  "deletedAt"
+]);
 function attachConflict(reason, error) {
   return { ok: false, outcome: "attach-conflict", reason, error };
 }
@@ -80579,8 +80618,8 @@ async function replaceRequest(request) {
   if (createEvents.length !== 1 || createEvents[0].threadId !== replacementId || createEvents[0].payload.id !== replacementId || deleteEvents.length !== oldThreadIds.length || new Set(deleteEvents.map((event) => event.threadId)).size !== oldThreadIds.length || oldThreadIds.some((id2) => !deleteEvents.some((event) => event.threadId === id2))) {
     return replaceConflict("invalid-event-set", "replace requires one replacement thread and one tombstone for every old thread");
   }
-  if (deleteEvents.some((event) => event.payload.projectId !== request.projectId || event.payload.providerInstanceId !== request.providerInstanceId)) {
-    return replaceConflict("event-identity-mismatch", "every retired thread shell must belong to the requested project and provider instance");
+  if (deleteEvents.some((event) => event.providerInstanceId !== request.providerInstanceId || event.payload.projectId !== request.projectId || event.payload.providerInstanceId !== request.providerInstanceId)) {
+    return replaceConflict("event-identity-mismatch", "every retired thread envelope and shell must belong to the requested project and provider instance");
   }
   const replacementEvents = events2.filter((event) => event.threadId === replacementId);
   const tombstonesValid = deleteEvents.every((event) => event.payload.id === event.threadId && String(event.payload.deletedAt) === String(event.occurredAt) && String(event.payload.updatedAt) === String(event.occurredAt));
@@ -80649,6 +80688,14 @@ async function replaceRequest(request) {
           if (!shell || shell.deletedAt != null) return replaceConflict("old-thread-not-live", `old thread is missing or deleted: ${rawId}`);
           if (shell.projectId !== request.projectId || shell.providerInstanceId !== request.providerInstanceId || shell.activeProviderThreadId !== expectedOldBinding.providerThreadId) {
             return replaceConflict("old-thread-identity-conflict", `old thread identity does not match the replacement owner: ${rawId}`);
+          }
+          const tombstone = deleteEvents.find((event) => event.threadId === rawId);
+          const expectedTombstone = Object.fromEntries(Object.entries(shell).filter(([key]) => threadPayloadFields.has(key)));
+          expectedTombstone.deletedAt = tombstone?.occurredAt;
+          expectedTombstone.titleRegeneration = null;
+          expectedTombstone.updatedAt = tombstone?.occurredAt;
+          if (!tombstone || canonicalJson(tombstone.payload) !== canonicalJson(expectedTombstone)) {
+            return replaceConflict("old-thread-payload-conflict", `retired thread tombstone does not preserve the current native shell: ${rawId}`);
           }
           const snapshot2 = yield* projections.getThreadSnapshot(oldId);
           const state = snapshot2.projection;
