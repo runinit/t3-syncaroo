@@ -57,6 +57,7 @@ if (preserveArtifacts) {
   }
 }
 try {
+  run("npm", ["run", "typecheck"]);
   run(process.execPath, ["scripts/compatibility/v2-proof/prepare.mjs"]);
   run("npm", ["run", "build"]);
   const reviewedManifest = join(root, "scripts/compatibility/v2-native/vendor-manifest.json");

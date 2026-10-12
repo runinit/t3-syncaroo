@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { chmod, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -35,4 +36,34 @@ test('operations for one target serialize even when caller starts promises toget
   const second = serializeByTarget('codex:/tmp/isolated/state.sqlite', async () => { order.push('second:start'); });
   await Promise.all([first, second]);
   assert.deepEqual(order, ['first:start', 'first:end', 'second:start']);
+});
+
+test('pinned test stops before source preparation when typecheck fails', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'v2-pinned-preflight-test-'));
+  try {
+    const scripts = join(root, 'scripts/compatibility/v2-native');
+    const proof = join(root, 'scripts/compatibility/v2-proof');
+    const fakeBin = join(root, 'fake-bin');
+    await mkdir(scripts, { recursive: true });
+    await mkdir(proof, { recursive: true });
+    await mkdir(fakeBin, { recursive: true });
+    await copyFile(new URL('./pinned-test.mjs', import.meta.url), join(scripts, 'pinned-test.mjs'));
+    await copyFile(new URL('./source-lock.json', import.meta.url), join(scripts, 'source-lock.json'));
+    const preparedMarker = join(root, 'prepared');
+    await writeFile(join(proof, 'prepare.mjs'), `import { writeFile } from 'node:fs/promises'; await writeFile(${JSON.stringify(preparedMarker)}, 'prepared');\n`);
+    const npmCalls = join(root, 'npm-calls');
+    const npmPath = join(fakeBin, 'npm');
+    await writeFile(npmPath, `#!/bin/sh\nprintf '%s\\n' "$*" >> ${JSON.stringify(npmCalls)}\nexit 37\n`);
+    await chmod(npmPath, 0o755);
+
+    const result = spawnSync(process.execPath, [join(scripts, 'pinned-test.mjs')], {
+      cwd: root,
+      env: { ...process.env, PATH: `${fakeBin}:${process.env.PATH ?? ''}` },
+      encoding: 'utf8',
+    });
+
+    assert.notEqual(result.status, 0, 'pinned test must propagate the typecheck failure');
+    assert.deepEqual((await readFile(npmCalls, 'utf8')).trim().split('\n'), ['run typecheck']);
+    await assert.rejects(readFile(preparedMarker), { code: 'ENOENT' });
+  } finally { await rm(root, { recursive: true, force: true }); }
 });
