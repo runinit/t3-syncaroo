@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/CarlosGtrz/t3-import/internal/target/sqlite"
+	"github.com/runinit/t3-syncaroo/internal/target/sqlite"
 )
 
 func TestCreateMakesVerifiedTargetSnapshot(t *testing.T) {

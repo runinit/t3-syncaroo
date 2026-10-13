@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/CarlosGtrz/t3-import/internal/target/config"
+	"github.com/runinit/t3-syncaroo/internal/target/config"
 )
 
 func TestInspectRuntimeAbsentMalformedAndOrigin(t *testing.T) {

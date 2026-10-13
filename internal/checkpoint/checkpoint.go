@@ -10,7 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/CarlosGtrz/t3-import/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/domain"
 )
 
 type TurnV1 struct {

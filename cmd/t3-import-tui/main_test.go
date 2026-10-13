@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/CarlosGtrz/t3-import/internal/app"
+	"github.com/runinit/t3-syncaroo/internal/app"
 	tea "github.com/charmbracelet/bubbletea"
 )
 

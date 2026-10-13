@@ -6,7 +6,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/CarlosGtrz/t3-import/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/domain"
 )
 
 func TestResolveTargetPathsPrefersV2AndHonorsOverrides(t *testing.T) {

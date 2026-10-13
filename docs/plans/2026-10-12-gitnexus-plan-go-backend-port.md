@@ -75,7 +75,7 @@ No GitNexus PDG layer was available for this checkout. Source review establishes
 - **Semantic drift in provider parsing.** Codex rollout rows and app-server metadata can disagree; Claude transcripts contain graph, branch, retry, compaction, and sidechain edge cases. Golden and differential fixture tests must cover the complete supported semantics before deleting TS parsers.
 - **Data-loss/recovery risk.** Backup ordering, lock scope, staged attachments, atomic legacy transactions, v2 readback, ledger updates, and cache reset rollback must remain ordered as today. Confirmed writes must not be cancelled halfway by TUI teardown.
 - **Compatibility risk.** JSON keys, optional/null behavior, output stream split, command flags, exit codes, IDs, checkpoint hashes, and ledger format remain user-facing contracts. npm installations are out of scope. Pin behavior with fixtures before migration.
-- **Platform/package risk.** Go 1.24 builds on three OSes; SQLite driver CGO, native helper, file permissions, process liveness, and Electron cache paths have platform-specific behavior. Test clean consumer installs on Windows/macOS/Linux.
+- **Platform/package risk.** Go 1.27.2 builds on three OSes; SQLite driver CGO, native helper, file permissions, process liveness, and Electron cache paths have platform-specific behavior. Test clean consumer installs on Windows/macOS/Linux.
 - **Scope risk.** Porting all v2 behavior is much larger than the existing Go UI. Sequence by user-visible capability and do not declare completion while a TypeScript subprocess still performs importer or T3 operations.
 - **Observability.** Preserve structured per-session outcomes and include target, backup paths, operation type, counts, and recovery action in CLI/TUI results. Avoid logging transcript or attachment contents.
 
@@ -151,7 +151,7 @@ implementation_context:
     - 'Dual implementation drift may hide parser or recovery regressions without differential tests.'
     - 'Go packaging channel is open: `go install`, downloadable binaries, or both.'
   assumptions:
-    - 'Use Go 1.24+ and keep existing supported T3 profile set unchanged; verify from go.mod, CI, and compatibility references.'
+    - 'Use Go 1.27.2+ and keep existing supported T3 profile set unchanged; verify from go.mod, CI, and compatibility references.'
     - 'Go owns both source adapters, legacy/v2 target behavior, recovery, and every CLI/TUI operation.'
     - 'Preserve T3-owned schema migrations and existing ledger/checkpoint readability; redesign internal write/projection operations where needed.'
     - 'Standard depth is used because no depth answer arrived; this architecture migration uses the full plan form.'

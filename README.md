@@ -4,16 +4,16 @@
 
 ## Install
 
-Install Go 1.24 or newer, then install both commands:
+Install Go 1.27.2 or newer, then install both commands:
 
 ```sh
-go install github.com/CarlosGtrz/t3-import/cmd/t3-import@v1.0.0
-go install github.com/CarlosGtrz/t3-import/cmd/t3-import-tui@v1.0.0
+go install github.com/runinit/t3-syncaroo/cmd/t3-import@v1.0.0
+go install github.com/runinit/t3-syncaroo/cmd/t3-import-tui@v1.0.0
 ```
 
 The `t3-import` command starts the TUI when run without arguments. It finds `t3-import-tui` on `PATH`; set `T3_IMPORT_TUI` if you installed the TUI somewhere else.
 
-The release workflow publishes binaries for Linux, macOS, and Windows (amd64 and arm64) to [GitHub Releases](https://github.com/CarlosGtrz/t3-import/releases) when a `v1.0.*` tag is pushed. The CLI works with `--json` for scripts and automation.
+The release workflow publishes binaries for Linux, macOS, and Windows (amd64 and arm64) to [GitHub Releases](https://github.com/runinit/t3-syncaroo/releases) when a `v1.0.*` tag is pushed. The CLI works with `--json` for scripts and automation.
 
 ## Use the TUI
 

@@ -4,9 +4,9 @@ package registry
 import (
 	"fmt"
 
-	"github.com/CarlosGtrz/t3-import/internal/domain"
-	"github.com/CarlosGtrz/t3-import/internal/source/claude"
-	"github.com/CarlosGtrz/t3-import/internal/source/codex"
+	"github.com/runinit/t3-syncaroo/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/source/claude"
+	"github.com/runinit/t3-syncaroo/internal/source/codex"
 )
 
 type Registry struct {

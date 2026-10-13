@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/CarlosGtrz/t3-import/internal/target/sqlite"
+	"github.com/runinit/t3-syncaroo/internal/target/sqlite"
 )
 
 type Profile string

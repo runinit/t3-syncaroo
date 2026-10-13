@@ -13,9 +13,9 @@ import (
 	"runtime/debug"
 	"strings"
 
-	"github.com/CarlosGtrz/t3-import/internal/app"
-	"github.com/CarlosGtrz/t3-import/internal/domain"
-	"github.com/CarlosGtrz/t3-import/internal/target/config"
+	"github.com/runinit/t3-syncaroo/internal/app"
+	"github.com/runinit/t3-syncaroo/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/target/config"
 )
 
 type caller func(context.Context, config.TargetPaths, app.Request) (json.RawMessage, error)

@@ -9,14 +9,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/CarlosGtrz/t3-import/internal/checkpoint"
-	"github.com/CarlosGtrz/t3-import/internal/domain"
-	"github.com/CarlosGtrz/t3-import/internal/identity"
-	"github.com/CarlosGtrz/t3-import/internal/source/registry"
-	"github.com/CarlosGtrz/t3-import/internal/target/config"
-	"github.com/CarlosGtrz/t3-import/internal/target/ledger"
-	"github.com/CarlosGtrz/t3-import/internal/target/sqlite"
-	"github.com/CarlosGtrz/t3-import/internal/target/v2"
+	"github.com/runinit/t3-syncaroo/internal/checkpoint"
+	"github.com/runinit/t3-syncaroo/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/identity"
+	"github.com/runinit/t3-syncaroo/internal/source/registry"
+	"github.com/runinit/t3-syncaroo/internal/target/config"
+	"github.com/runinit/t3-syncaroo/internal/target/ledger"
+	"github.com/runinit/t3-syncaroo/internal/target/sqlite"
+	"github.com/runinit/t3-syncaroo/internal/target/v2"
 )
 
 type fixedSource struct {

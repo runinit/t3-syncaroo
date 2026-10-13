@@ -1,6 +1,6 @@
-module github.com/CarlosGtrz/t3-import
+module github.com/runinit/t3-syncaroo
 
-go 1.24.0
+go 1.27.2
 
 require (
 	github.com/charmbracelet/bubbletea v1.3.10

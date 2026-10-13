@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CarlosGtrz/t3-import/internal/domain"
-	"github.com/CarlosGtrz/t3-import/internal/target/config"
-	t3runtime "github.com/CarlosGtrz/t3-import/internal/target/runtime"
+	"github.com/runinit/t3-syncaroo/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/target/config"
+	t3runtime "github.com/runinit/t3-syncaroo/internal/target/runtime"
 )
 
 var profileNames = []string{"t3code-v2", "T3 Code (Alpha)", "T3 Code (Nightly)", "T3 Code", "t3code"}

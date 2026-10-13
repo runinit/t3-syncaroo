@@ -11,7 +11,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/CarlosGtrz/t3-import/internal/target/config"
+	"github.com/runinit/t3-syncaroo/internal/target/config"
 )
 
 type RuntimeState struct {

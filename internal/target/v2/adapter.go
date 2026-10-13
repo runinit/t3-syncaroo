@@ -15,9 +15,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/CarlosGtrz/t3-import/internal/domain"
-	"github.com/CarlosGtrz/t3-import/internal/target/assets"
-	targetschema "github.com/CarlosGtrz/t3-import/internal/target/schema"
+	"github.com/runinit/t3-syncaroo/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/target/assets"
+	targetschema "github.com/runinit/t3-syncaroo/internal/target/schema"
 )
 
 type Event struct {

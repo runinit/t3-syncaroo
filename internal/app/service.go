@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/CarlosGtrz/t3-import/internal/domain"
-	"github.com/CarlosGtrz/t3-import/internal/source/registry"
-	"github.com/CarlosGtrz/t3-import/internal/target/config"
-	"github.com/CarlosGtrz/t3-import/internal/target/launch"
-	"github.com/CarlosGtrz/t3-import/internal/target/runtime"
+	"github.com/runinit/t3-syncaroo/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/source/registry"
+	"github.com/runinit/t3-syncaroo/internal/target/config"
+	"github.com/runinit/t3-syncaroo/internal/target/launch"
+	"github.com/runinit/t3-syncaroo/internal/target/runtime"
 )
 
 const ProtocolVersion = 1

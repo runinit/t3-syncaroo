@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/CarlosGtrz/t3-import/internal/app"
-	"github.com/CarlosGtrz/t3-import/internal/target/config"
+	"github.com/runinit/t3-syncaroo/internal/app"
+	"github.com/runinit/t3-syncaroo/internal/target/config"
 )
 
 func TestUsageAndUnknownCommandExit(t *testing.T) {

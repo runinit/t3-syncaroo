@@ -2,7 +2,7 @@ package codex
 
 import (
 	"context"
-	"github.com/CarlosGtrz/t3-import/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/domain"
 	"os"
 	"path/filepath"
 	"strings"

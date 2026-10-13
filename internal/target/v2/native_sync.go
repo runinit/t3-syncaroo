@@ -9,8 +9,8 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/CarlosGtrz/t3-import/internal/checkpoint"
-	"github.com/CarlosGtrz/t3-import/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/checkpoint"
+	"github.com/runinit/t3-syncaroo/internal/domain"
 )
 
 // NativeSyncMatch describes the first source turn that is not already present

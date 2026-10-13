@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/CarlosGtrz/t3-import/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/domain"
 )
 
 func writeRows(t *testing.T, path string, rows ...map[string]any) {

@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/CarlosGtrz/t3-import/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/domain"
 )
 
 var errChangedDuringRead = errors.New("SOURCE_CHANGED_DURING_READ")

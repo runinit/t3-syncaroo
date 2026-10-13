@@ -17,9 +17,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/CarlosGtrz/t3-import/internal/checkpoint"
-	"github.com/CarlosGtrz/t3-import/internal/domain"
-	"github.com/CarlosGtrz/t3-import/internal/target/assets"
+	"github.com/runinit/t3-syncaroo/internal/checkpoint"
+	"github.com/runinit/t3-syncaroo/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/target/assets"
 )
 
 var supported = map[int]bool{40: true, 41: true, 42: true, 43: true, 44: true, 45: true, 46: true, 47: true, 48: true, 49: true, 50: true, 51: true, 52: true, 53: true}

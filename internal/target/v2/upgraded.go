@@ -8,9 +8,9 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/CarlosGtrz/t3-import/internal/checkpoint"
-	"github.com/CarlosGtrz/t3-import/internal/domain"
-	"github.com/CarlosGtrz/t3-import/internal/identity"
+	"github.com/runinit/t3-syncaroo/internal/checkpoint"
+	"github.com/runinit/t3-syncaroo/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/identity"
 )
 
 // UpgradedExpectation binds a converted v1 task to one source ledger mapping.

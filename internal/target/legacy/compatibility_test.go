@@ -11,10 +11,10 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/CarlosGtrz/t3-import/internal/checkpoint"
-	"github.com/CarlosGtrz/t3-import/internal/domain"
-	"github.com/CarlosGtrz/t3-import/internal/target/schema"
-	"github.com/CarlosGtrz/t3-import/internal/target/sqlite"
+	"github.com/runinit/t3-syncaroo/internal/checkpoint"
+	"github.com/runinit/t3-syncaroo/internal/domain"
+	"github.com/runinit/t3-syncaroo/internal/target/schema"
+	"github.com/runinit/t3-syncaroo/internal/target/sqlite"
 )
 
 //go:embed testdata/t3-schemas.json
