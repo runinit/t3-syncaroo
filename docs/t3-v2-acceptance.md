@@ -1,36 +1,64 @@
-# T3 v2 acceptance index
+# Historical T3 v2 acceptance record
 
-This is the current entry point for T3 v2 validation. The implementation is pinned to T3 Code `0.0.46-nightly.20261011.2994`, source commit `d07a07f33c0a1b317dea6234636976231c3688b5`, migration 61. The native helper source archive SHA-256 is `adb3a2523804bb9a017b04fb12af9e6da8d81d58c10d830240a6b4db71e11bf8`; the desktop acceptance report records the tested AppImage hash.
+This record documents acceptance work on the former TypeScript implementation.
+Its runner, native helper, fixtures, and artifacts are not part of the Go v1.0
+release. The results below are historical context, not acceptance evidence for
+the Go port. Current build and test commands are in the root README.
 
-## Current checks
+## Go port verification boundary
 
-Run the reproducible pinned checks and build the isolated synthetic Codex and Claude fixtures with:
+The Go test suite covers the pinned v2 profile using synthetic SQLite homes.
+Service tests exercise import, synchronization, replacement, built-in and
+native-history adoption, checkpoint recovery, conflict refusal, and backup or
+cache behavior. The v2 package tests exercise event and projection writes,
+readback, rollback, and strict profile validation. These tests do not run T3's
+pinned migration runner or real provider sessions. The legacy adapter has
+separate tests against captured T3 DDL for each migration 40–53; see
+[compatibility evidence](compatibility.md).
 
-```sh
-npm run acceptance:v2 -- --appimage /path/to/T3-Code-0.0.46-nightly.20261011.2994-x86_64.AppImage
-```
+The Go CLI has also been smoke-tested against a database created by the pinned
+T3 application itself. That runtime check is recorded below; it validates T3's
+event projection and storage behavior but does not establish desktop rendering
+or real-provider continuation. The TypeScript-era GUI screenshots and provider
+results below are historical and cannot be used as evidence for the Go release.
 
-The AppImage path is optional for automated checks, but required to enable GUI acceptance completion. The runner verifies its SHA-256 against the pinned evidence. It owns fixture setup, isolation, check execution, and output format. Its versioned manifest is written by default to `artifacts/v2-native/acceptance/<UTC timestamp>/manifest.json`; each check records its command, status, summary, and output file. Artifacts under `artifacts/` are local generated output and are gitignored. Raw logs can contain local process details, so keep them private; share the manifest and selected sanitized results or screenshots rather than the whole artifact directory.
+The former implementation targeted T3 Code `0.0.46-nightly.20261011.2994`, source commit `d07a07f33c0a1b317dea6234636976231c3688b5`, migration 61. The native helper source archive SHA-256 was `adb3a2523804bb9a017b04fb12af9e6da8d81d58c10d830240a6b4db71e11bf8`; the desktop acceptance report records the tested AppImage hash.
 
-For the GUI phase, use the generated `GUI_CHECKLIST.md` and fixture manifest with an isolated Agent Workspace. Inspect both imported tasks and save screenshots under that run's `screenshots/` directory. Then run the checklist's post-view command to exercise replacement and repeated sync, close the apps, and stop the workspace. Record completion with:
+## Former acceptance process
 
-```sh
-npm run acceptance:v2:complete-gui -- \
-  --manifest artifacts/v2-native/acceptance/<run>/manifest.json \
-  --codex-screenshot screenshots/codex.png \
-  --claude-screenshot screenshots/claude.png \
-  --workspace-stopped --apps-closed
-```
+The former process used a pinned T3 Code nightly, synthetic Codex and Claude
+fixtures, a bundled native helper, and isolated GUI checks. The runner and helper
+were removed during the Go port, so those npm commands are intentionally not
+available in this checkout. The date-stamped findings below describe the earlier
+implementation only.
 
-This command verifies the screenshots and post-view results before updating the manifest to `accepted`. The script never launches the desktop or workspace, so automated success alone leaves GUI status pending. `npm run test:v2-acceptance-runner` runs the runner's isolation, output safety, and serialization regression tests.
+## Go pinned T3 runtime smoke — 2026-10-13
 
-The cross-platform GitHub Actions matrix runs `npm run typecheck`, `npm test`, and `npm pack` on Windows, macOS, and Ubuntu with Node 22 and 24. A separate Linux x64 Node 22 job runs `npm run test:v2-pinned`, which prepares the verified pinned source and migration fixtures, requires the targeted v2 suites, and checks the packed consumer. A plain `npm test` can skip fixture-dependent tests when their fixture environment is absent. The legacy matrix is reproduced with `npm run test:compatibility`.
+The run used T3 Code `0.0.46-nightly.20261011.2994`, AppImage SHA-256
+`e8c01c767c16cbeb9181dc04f4f1bbc88553b12b746c17f4e9189f266bf036e7`, with a
+fresh disposable T3 home. The app created its migration-61 database; the Go
+CLI then imported synthetic Codex and Claude transcripts, each with two settled
+turns. No provider API was called.
 
-## Latest verification — 2026-10-12
+On successive app starts, T3 projected both imports and syncs. Each source
+preview returned `up-to-date` after synchronization. Editing the first answer
+in each synthetic transcript made both histories replaceable; Go replacement
+created a new thread and tombstoned the old one for each provider. The final T3
+projection contained four thread rows, two live threads, and 16 messages;
+SQLite integrity was `ok`. The `sqlite_master` schema and all 61 migration
+records had identical fingerprints before importer writes and after T3
+reprojected the replacements.
 
-The fresh local acceptance run is **accepted** on tested repository HEAD `3f86bf5`. Its [manifest](../artifacts/v2-native/acceptance/2026-10-12T07-31-28-315Z/manifest.json) records the verified pinned AppImage checksum, runner-safety checks, 154/154 required pinned-v2 tests, packed consumer/package check, and synthetic fixture setup. The tested repository snapshot is recorded in [run context](../artifacts/v2-native/acceptance/2026-10-12T07-31-28-315Z/gui/run-context.json). The earlier 640/640 fixture-enabled suite and typecheck remain the latest full-suite and typecheck results; no implementation code changed between those checks and this fresh acceptance run.
+This was a backend/runtime smoke in a private Xvfb display. No application
+window rendered there, so it does not count as desktop acceptance. The temporary
+T3 home, provider fixtures, and backups were not added to the repository.
 
-Manual GUI checks in an isolated Agent Workspace showed both synthetic Codex and Claude histories with their text, image previews, plans, and tool activity. After viewing both original tasks, replacement succeeded for each provider; each then synced twice with `up-to-date` status and zero new events. Reopening the pinned app showed both replacement histories, and the workspace record confirms the apps were closed and the workspace stopped. Initial and replacement screenshots are in the run's [screenshots directory](../artifacts/v2-native/acceptance/2026-10-12T07-31-28-315Z/screenshots/); [post-view results](../artifacts/v2-native/acceptance/2026-10-12T07-31-28-315Z/gui/after-view-results.json) record the replacement and repeat-sync outcomes.
+## Historical TypeScript acceptance — 2026-10-12
+
+The former TypeScript implementation's acceptance work is summarized in the
+[historical provider and GUI report](t3-v2-real-provider-acceptance.md). Its
+runner manifests and screenshots are not included in this Go-only checkout;
+that acceptance is not evidence for the Go port.
 
 ## Current boundaries
 
@@ -42,6 +70,6 @@ Manual GUI checks in an isolated Agent Workspace showed both synthetic Codex and
 ## References
 
 - [Real-provider, GUI, and final-retake evidence](t3-v2-real-provider-acceptance.md)
-- [Pinned helper packaging and source-lock procedure](../scripts/compatibility/v2-native/README.md)
+- Historical helper packaging and source-lock procedure (the helper is no longer shipped)
 - [Original `.2980` design baseline](t3-v2-native-design.md)
 - [Historical workflow readiness assessment](t3-v2-workflow-readiness.md)

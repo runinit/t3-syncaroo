@@ -6,6 +6,8 @@ the source pinned for `0.0.46-nightly.20261011.2980`.
 
 Historical proof for `.2980` only. The approved implementation target is now
 `.2994`; this result does not establish `.2994` runtime acceptance.
+The TypeScript proof runner and its preparation scripts were removed during the
+Go port; the commands in the original reproduction notes are historical.
 
 ## Result
 
@@ -86,9 +88,9 @@ needs to establish a narrow bundle boundary, include third-party license
 notices, and measure the production artifact. The proof does not establish that
 the full monorepo package graph should ship with t3-import.
 
-## Artifacts
+## Historical artifacts
 
-- Reproducible runner: [`run.mjs`](../scripts/compatibility/v2-proof/run.mjs)
-- Dependency/source preparation: [`prepare.mjs`](../scripts/compatibility/v2-proof/prepare.mjs)
-- Scope and prior source analysis: [`t3-v2-support-spec.md`](t3-v2-support-spec.md),
+The TypeScript proof runner and preparation script were retired during the Go
+port. The evidence summary above is retained for context. Related source analysis:
+[`t3-v2-support-spec.md`](t3-v2-support-spec.md),
   [`t3-v2-support-research.md`](t3-v2-support-research.md)

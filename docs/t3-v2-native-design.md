@@ -8,8 +8,8 @@ Status: implementation design for the exact T3 Code nightly source commit
 
 Historical design baseline for `.2980`. The approved implementation target is
 now `.2994`; use [the nightly comparison](t3-v2-nightly-update-research.md)
-for source changes. For the current target, checks, and acceptance boundaries,
-use the [T3 v2 acceptance index](t3-v2-acceptance.md); this design and its
+for source changes. For the historical target, checks, and acceptance record,
+use the [T3 v2 acceptance record](t3-v2-acceptance.md); this design and its
 earlier proof are not `.2994` runtime acceptance.
 
 ## Decision
@@ -22,13 +22,12 @@ SQL. The native sink is the supported write boundary: it appends the v2-marked
 events, applies projections, normalizes turn-item positions, advances projection
 metadata, and commits these database changes together.
 
-The synthetic proof at [scripts/compatibility/v2-proof/run.mjs](../scripts/compatibility/v2-proof/run.mjs)
-used the pinned migrations and actual sink. It reopened the database and read
-back the thread, message, and native provider-session reference through T3's
-projection store. It also verified preflight recognition of an existing
-deterministic thread and rollback of a batch whose later event ID collided.
-This proves the native persistence seam, not UI rendering, asset handling,
-provider continuation, or a shippable npm bundle.
+The historical synthetic proof used the pinned migrations and actual sink. It
+reopened the database and read back the thread, message, and native
+provider-session reference through T3's projection store. It also verified
+preflight recognition of an existing deterministic thread and rollback of a
+batch whose later event ID collided. This records the former persistence
+research; it does not describe the implementation shipped by the Go port.
 
 ## Integration shape
 

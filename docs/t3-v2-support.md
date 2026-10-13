@@ -1,5 +1,9 @@
 # T3 nightly v2 support
 
+This is historical planning context for the former TypeScript implementation.
+The current Go implementation and release checks are described in the root
+README.
+
 Scope decisions and final shared understanding confirmed on 2026-10-11. The
 implementation specification is in [t3-v2-support-spec.md](t3-v2-support-spec.md).
 The native write strategy still requires implementation validation.

@@ -190,11 +190,9 @@ no installed T3 data was opened, and no paid provider was called.
   the pinned [`apps/server/package.json`](https://github.com/pingdotgg/t3code/blob/ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/apps/server/package.json),
   [`packages/contracts/package.json`](https://github.com/pingdotgg/t3code/blob/ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/packages/contracts/package.json),
   and [`pnpm-workspace.yaml` catalog](https://github.com/pingdotgg/t3code/blob/ed0f7b908b2e7b3a22e6fd82a73794c2fe6ee06e/pnpm-workspace.yaml#L54-L55).
-- Current t3-import publishes `dist`, README, and LICENSE and has SQLite/CLI/UI
-  runtime dependencies but no Effect dependency. Its compatibility harness is
-  currently built around the v1 projection API. See local
-  [`package.json`](../package.json) and
-  [`scripts/compatibility`](../scripts/compatibility/).
+- The former TypeScript t3-import published an npm package and used a
+  compatibility harness built around the v1 projection API. That implementation
+  and harness were retired during the Go port.
 
 ## Implementation proposal (not yet implemented or proven)
 

@@ -1,4 +1,8 @@
-# T3 compatibility validation
+# T3 compatibility evidence
+
+This document separates current Go checks from historical validation of the
+retired TypeScript implementation. Run the current Go checks from the
+repository root with `go test ./...` and `go vet ./...`.
 
 The importer supports database migrations 40–53 explicitly. A supported number
 must also pass integrity and required-column checks. This is not a promise that
@@ -7,8 +11,8 @@ every future T3 commit retaining the same migration number will remain compatibl
 ## Pinned references
 
 Each historical reference below has the stated migration as its latest migration.
-Full commit IDs and matching Effect versions live in
-[`references.json`](../scripts/compatibility/references.json).
+These references identify the historical schema snapshots used by the former
+compatibility harness.
 
 | Migration | Reference commit | Migration change |
 |---|---|---|
@@ -58,65 +62,27 @@ The migration-52 reference is stable `v0.0.42`; migration 53 is nightly
   independent pull-request file-view tracking. The shared event writer and
   provider bindings pass the same checks on stable 0.0.42 and the pinned nightly.
 
-## Reproduce validation
+## Current Go legacy-schema coverage
 
-Use a checkout containing the pinned commits at `repos/t3code`, or set
-`T3_REFERENCE_REPO` to another local checkout. Preparation uses `git archive` and
-does not switch or edit that checkout. Git, tar, Node.js 22.21.1 or newer, and npm
-are required. Dependency installation requires network access.
+`internal/target/legacy/testdata/t3-schemas.json` contains the portable DDL and
+migration records for the fourteen T3 reference schemas at migrations 40–53.
+`TestLegacyOperationsAgainstHistoricalT3Schemas` constructs each schema in a
+temporary SQLite database, validates the profile, and exercises import, repeat
+preview, sync, exact sync adoption, and replacement. It also verifies that
+those writes leave T3's schema objects and migration records unchanged.
 
-```text
-npm run compat:prepare
-npm run test:compatibility
-```
+This proves the Go legacy adapter against the captured schema snapshots. It is
+not a full T3 server projection or desktop acceptance run. The Go v2 tests use
+synthetic pinned-profile homes; see the [v2 acceptance record](t3-v2-acceptance.md)
+for the remaining boundary.
 
-The first command is optional because the second includes it. Dependencies and
-source snapshots live under the gitignored `artifacts/compatibility` directory.
-The harness pins Effect and its platform packages together, including transitive
-platform-node-shared, to avoid mixing incompatible prereleases.
+## Scope of the historical results
 
-For a focused rerun after preparation:
+The former 54-scenario harness covered both providers at each of migrations 40–53,
+plus upgrades from every migration 40–52 to migration 53. It exercised migration
+execution, event decoding and projection, provider binding, idempotent
+import/sync/replace, recovery, attachments, activities, terminal states, resume
+routing, and continuation adoption against synthetic data and controlled provider
+adapters. Those results validated the former TypeScript implementation only.
 
-```text
-npx tsx scripts/compatibility/run.ts 53
-```
-
-Each full run executes 54 scenarios: both sources at all fourteen versions, plus
-both sources upgrading from each version 40–52 to 53. Each scenario covers real
-migration execution, event decoding, startup projection, custom instance binding,
-idempotent import/sync/replace, ledger recovery, title updates, changed-history
-conflicts, attachments, plans, activities, terminal states, replacement visibility,
-resume dispatch, and adoption of a controlled continuation without duplicate events.
-
-The real T3 ProviderService restores persisted cwd/resume state and routes it to
-controlled adapters. Those doubles check the original provider cursor and receive
-a subsequent turn on the imported/replacement task. Controlled continuation events
-are then appended and projected through T3's real event store and projector.
-This tests persistence and routing, not provider CLI execution, credentials, network
-services, browser rendering, or the orchestration reactor's provider-event translation.
-
-Results are written incrementally to a new
-`artifacts/compatibility/run-*/results.json`; the command prints the final path.
-A successful full run must report all 54 scenarios. A failed scenario stops the
-command with a nonzero exit code; partial reports are not evidence of a full pass.
-
-## Regenerate schema fixtures
-
-```text
-npm run compat:prepare
-npm run compat:schemas
-npm test
-npm run typecheck
-npm run build
-```
-
-Fixture generation runs each historical migration runner on a fresh, marked
-synthetic T3 home and exports its complete DDL and migration records. Execution
-timestamps are normalized to keep the committed JSON reproducible. Ordinary tests
-use that JSON without downloading or importing the T3 reference repository.
-
-Synthetic homes are retained under `artifacts/compatibility` for diagnosis. The
-runner refuses homes without its fixture marker. It never snapshots or opens the
-installed application's database, starts a live T3 application, or invokes paid
-provider processes. Reference sources, integration dependencies, and synthetic
-data are excluded from the published npm package.
+The former TypeScript harness results do not transfer to the Go implementation.
